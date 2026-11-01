@@ -1,0 +1,424 @@
+@ClinicSystem.Web_HostAddress = http://localhost:5220
+
+GET {{ClinicSystem.Web_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
+@host = http://localhost:5220
+
+### ყველა სპეციალობა
+GET {{host}}/api/specialties
+
+### შექმნა
+POST {{host}}/api/specialties
+Content-Type: application/json
+
+{
+  "name": "Neurology"
+}
+
+### ერთი id-ით
+GET {{host}}/api/specialties/3
+
+### განახლება
+PUT {{host}}/api/specialties/1
+Content-Type: application/json
+
+{
+  "name": "Neurology"
+}
+
+### წაშლა
+DELETE {{host}}/api/specialties/1
+
+### ექიმის შექმნა (specialtyId შეცვალე რეალური id-ით, ჯერ შექმენი სპეციალობა)
+POST {{host}}/api/doctors
+Content-Type: application/json
+
+{
+  "firstName": "Nino",
+  "lastName": "Beridze",
+  "personalNumber": "01001012125",
+  "phone": "555123451",
+  "email": "nino@cli.ge",
+  "password": "Doctor123!",
+  "specialtyId": 4
+}
+
+### ყველა ექიმი
+GET {{host}}/api/doctors
+
+### ექიმის დეაქტივაცია
+POST {{host}}/api/doctors/1/deactivate
+
+### გრაფიკის დამატება
+POST {{host}}/api/doctors/1/schedules
+Content-Type: application/json
+
+{
+  "dayOfWeek": "Monday",
+  "startTime": "09:00:00",
+  "endTime": "13:00:00"
+}
+
+### ექიმის გრაფიკები
+GET {{host}}/api/doctors/1/schedules
+
+### გადაკვეთა, უნდა დააბრუნოს 409
+POST {{host}}/api/doctors/1/schedules
+Content-Type: application/json
+
+{
+  "dayOfWeek": "Monday",
+  "startTime": "12:00:00",
+  "endTime": "16:00:00"
+}
+
+### განახლება
+PUT {{host}}/api/schedules/1
+Content-Type: application/json
+
+{
+  "dayOfWeek": "Monday",
+  "startTime": "09:00:00",
+  "endTime": "12:00:00"
+}
+
+### წაშლა
+DELETE {{host}}/api/schedules/1
+
+  ### პაციენტი ანგარიშით და ოჯახის ექიმით
+POST {{host}}/api/patients
+Content-Type: application/json
+
+{
+  "firstName": "Giorgi",
+  "lastName": "Kapanadze",
+  "personalNumber": "02002023456",
+  "phone": "577111222",
+  "birthDate": "1995-03-14",
+  "familyDoctorId": 2,
+  "email": "giorgi@mail.ge",
+  "password": "Patient123!"
+}
+
+### პაციენტი ანგარიშის გარეშე
+POST {{host}}/api/patients
+Content-Type: application/json
+
+{
+  "firstName": "Mari",
+  "lastName": "Kapanadze",
+  "personalNumber": "03003034567",
+  "birthDate": "2018-07-01"
+}
+
+### ყველა პაციენტი
+GET {{host}}/api/patients
+
+### ერთი ექიმის პაციენტები
+GET {{host}}/api/patients?familyDoctorId=2
+
+### ოჯახის ექიმის მიბმა
+PUT {{host}}/api/patients/2/family-doctor
+Content-Type: application/json
+
+{
+  "doctorId": 2
+}
+
+### ოჯახის ექიმის მოხსნა
+PUT {{host}}/api/patients/2/family-doctor
+Content-Type: application/json
+
+{
+  "doctorId": null
+}
+
+### მომავლის თარიღი, უნდა დააბრუნოს 400
+POST {{host}}/api/patients
+Content-Type: application/json
+
+{
+  "firstName": "Test",
+  "lastName": "Test",
+  "personalNumber": "04004045678",
+  "birthDate": "2090-01-01"
+}
+
+### ბარათის შექმნა
+POST {{host}}/api/patients/1/medical-profile
+Content-Type: application/json
+
+{
+  "bloodType": "o+",
+  "allergies": "Penicillin",
+  "chronicConditions": "Asthma"
+}
+
+### ბარათის ნახვა
+GET {{host}}/api/patients/1/medical-profile
+
+### განახლება
+PUT {{host}}/api/patients/1/medical-profile
+Content-Type: application/json
+
+{
+  "bloodType": "A-",
+  "allergies": "Penicillin, Pollen",
+  "chronicConditions": null
+}
+
+### არასწორი სისხლის ჯგუფი, უნდა დააბრუნოს 400
+POST {{host}}/api/patients/2/medical-profile
+Content-Type: application/json
+
+{
+  "bloodType": "X+"
+}
+### მიმართვის შექმნა
+POST {{host}}/api/patients/1/referrals
+Content-Type: application/json
+
+{
+  "fromDoctorId": 2,
+  "toSpecialtyId": 4,
+  "reason": "Frequent headaches",
+  "validForDays": 14
+}
+
+### პაციენტის მიმართვები
+GET {{host}}/api/patients/1/referrals
+
+### მხოლოდ აქტიური
+GET {{host}}/api/patients/1/referrals?activeOnly=true
+
+### ერთი მიმართვა
+GET {{host}}/api/referrals/1
+
+### ვადა 0 დღე, უნდა დააბრუნოს 400
+POST {{host}}/api/patients/1/referrals
+Content-Type: application/json
+
+{
+  "fromDoctorId": 2,
+  "toSpecialtyId": 4,
+  "validForDays": 0
+}
+
+### 1. ექიმ 2-ს ორშაბათის გრაფიკი
+POST {{host}}/api/doctors/2/schedules
+Content-Type: application/json
+
+{
+  "dayOfWeek": "Monday",
+  "startTime": "09:00:00",
+  "endTime": "13:00:00"
+}
+
+### 2. ექიმ 3-ს ორშაბათის გრაფიკი
+POST {{host}}/api/doctors/3/schedules
+Content-Type: application/json
+
+{
+  "dayOfWeek": "Monday",
+  "startTime": "09:00:00",
+  "endTime": "13:00:00"
+}
+
+### 3. თავისუფალი დროები ექიმ 2-სთვის
+GET {{host}}/api/doctors/2/available-slots?date=2026-11-09
+
+### 4. პაციენტი 1 ეწერება თავის ოჯახის ექიმთან (მიმართვა არ სჭირდება) -> 201
+POST {{host}}/api/appointments
+Content-Type: application/json
+
+{
+  "patientId": 1,
+  "doctorId": 2,
+  "startTime": "2026-11-09T10:00:00"
+}
+
+### 5. იგივე დრო ისევ -> 409 (ექიმი დაკავებულია)
+POST {{host}}/api/appointments
+Content-Type: application/json
+
+{
+  "patientId": 1,
+  "doctorId": 2,
+  "startTime": "2026-11-09T10:00:00"
+}
+
+### 6. პაციენტი 2 ექიმ 2-თან, ოჯახის ექიმი არ არის და მიმართვა არ აქვს -> 409
+POST {{host}}/api/appointments
+Content-Type: application/json
+
+{
+  "patientId": 2,
+  "doctorId": 2,
+  "startTime": "2026-11-09T11:00:00"
+}
+
+### 7. პაციენტი 1 ექიმ 3-თან მიმართვით -> 201 (მიმართვა 1 გამოყენებული ხდება)
+POST {{host}}/api/appointments
+Content-Type: application/json
+
+{
+  "patientId": 1,
+  "doctorId": 3,
+  "startTime": "2026-11-09T11:00:00",
+  "referralId": 1
+}
+
+### 8. ისევ იგივე მიმართვა სხვა დროზე -> 409 (უკვე გამოყენებულია)
+POST {{host}}/api/appointments
+Content-Type: application/json
+
+{
+  "patientId": 1,
+  "doctorId": 3,
+  "startTime": "2026-11-09T12:00:00",
+  "referralId": 1
+}
+
+### 9. პაციენტი 2 სხვისი მიმართვით -> 409 (მიმართვა სხვა პაციენტს ეკუთვნის)
+POST {{host}}/api/appointments
+Content-Type: application/json
+
+{
+  "patientId": 2,
+  "doctorId": 3,
+  "startTime": "2026-11-09T09:00:00",
+  "referralId": 1
+}
+
+### 10. ოჯახის ექიმთან მიმართვით -> 400 (არ არის საჭირო)
+POST {{host}}/api/appointments
+Content-Type: application/json
+
+{
+  "patientId": 1,
+  "doctorId": 2,
+  "startTime": "2026-11-09T09:00:00",
+  "referralId": 1
+}
+
+### 11. დეაქტივირებული ექიმი 1 -> 409
+POST {{host}}/api/appointments
+Content-Type: application/json
+
+{
+  "patientId": 1,
+  "doctorId": 1,
+  "startTime": "2026-11-09T09:00:00"
+}
+
+### 12. არასწორი დრო (ბადეზე არ არის) -> 400
+POST {{host}}/api/appointments
+Content-Type: application/json
+
+{
+  "patientId": 1,
+  "doctorId": 2,
+  "startTime": "2026-11-09T10:15:00"
+}
+
+### 13. გრაფიკს გარეთ -> 409
+POST {{host}}/api/appointments
+Content-Type: application/json
+
+{
+  "patientId": 1,
+  "doctorId": 2,
+  "startTime": "2026-11-09T14:00:00"
+}
+
+### 14. დადასტურება (id შეცვალე პასუხში მიღებული id-ით)
+POST {{host}}/api/appointments/1/approve
+
+### 15. დადასტურებულის ხელახლა დადასტურება -> 409
+POST {{host}}/api/appointments/1/approve
+
+### 16. მიმართვიანი ვიზიტის გაუქმება (id შეცვალე მე-7 მოთხოვნის პასუხიდან)
+POST {{host}}/api/appointments/2/cancel
+
+### 17. მიმართვა უნდა გათავისუფლდეს: isUsed = false
+GET {{host}}/api/referrals/1
+
+### 18. ექიმ 2-ის ვიზიტები ერთ დღეში
+GET {{host}}/api/doctors/2/appointments?date=2026-11-09
+
+### 19. პაციენტ 1-ის ვიზიტები
+GET {{host}}/api/patients/1/appointments
+
+
+### 1. ახალი ვიზიტი (პაციენტი 1, ექიმი 2, ორშაბათი 11:30). დაიმახსოვრე პასუხში id
+POST {{host}}/api/appointments
+Content-Type: application/json
+
+{
+  "patientId": 1,
+  "doctorId": 2,
+  "startTime": "2026-11-09T12:30:00"
+}
+
+### 2. კონსულტაცია Pending ვიზიტზე -> 409
+POST {{host}}/api/appointments/4/consultation
+Content-Type: application/json
+
+{
+  "diagnosis": "Migraine",
+  "prescription": "Ibuprofen 400mg"
+}
+
+### 3. ვიზიტის დადასტურება
+POST {{host}}/api/appointments/4/approve
+
+### 4. ცარიელი დიაგნოზი -> 400
+POST {{host}}/api/appointments/4/consultation
+Content-Type: application/json
+
+{
+  "diagnosis": "   "
+}
+
+### 5. კონსულტაციის შექმნა -> 201
+POST {{host}}/api/appointments/4/consultation
+Content-Type: application/json
+
+{
+  "diagnosis": "Migraine",
+  "prescription": "Ibuprofen 400mg"
+}
+
+### 6. მეორედ იმავე ვიზიტზე -> 409
+POST {{host}}/api/appointments/4/consultation
+Content-Type: application/json
+
+{
+  "diagnosis": "Migraine again"
+}
+
+### 7. ვიზიტი უკვე Completed უნდა იყოს
+GET {{host}}/api/appointments/4
+
+### 8. დასრულებული ვიზიტის გაუქმება -> 409
+POST {{host}}/api/appointments/4/cancel
+
+### 9. კონსულტაციის ნახვა
+GET {{host}}/api/appointments/4/consultation
+
+### 10. შესწორება
+PUT {{host}}/api/appointments/4/consultation
+Content-Type: application/json
+
+{
+  "diagnosis": "Migraine with aura",
+  "prescription": null
+}
+
+### 11. პაციენტის სამედიცინო ისტორია
+GET {{host}}/api/patients/1/consultations
+
+### 12. არარსებული ვიზიტი -> 404
+GET {{host}}/api/appointments/999/consultation
