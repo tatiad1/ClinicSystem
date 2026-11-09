@@ -31,5 +31,20 @@ namespace ClinicSystem.Infrastructure.Repositories
 
             return await query.ToListAsync(cancellationToken);
         }
+
+        public async Task<ICollection<Patient>> GetAccessibleToDoctorAsync(
+            int doctorId,
+            CancellationToken cancellationToken = default)
+        {
+            return await _context.Patients
+                .AsNoTracking()
+                .Include(p => p.Person).ThenInclude(person => person.User)
+                .Include(p => p.FamilyDoctor!).ThenInclude(d => d.User).ThenInclude(u => u.Person)
+                .Where(p => p.FamilyDoctorId == doctorId
+                    || p.Appointments.Any(a => a.DoctorId == doctorId
+                        && (a.Status == ClinicSystem.Domain.Enums.AppointmentStatus.Approved
+                            || a.Status == ClinicSystem.Domain.Enums.AppointmentStatus.Completed)))
+                .ToListAsync(cancellationToken);
+        }
     }
 }

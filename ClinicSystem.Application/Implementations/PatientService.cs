@@ -40,6 +40,14 @@ namespace ClinicSystem.Application.Implementations
             return patients.Select(_mapper.Map<PatientDTO>).ToList();
         }
 
+        public async Task<ICollection<PatientDTO>> GetAccessibleToDoctorAsync(
+            int doctorId,
+            CancellationToken cancellationToken)
+        {
+            var patients = await _patientRepository.GetAccessibleToDoctorAsync(doctorId, cancellationToken);
+            return patients.Select(_mapper.Map<PatientDTO>).ToList();
+        }
+
         public async Task<PatientDTO?> GetByIdAsync(int id, CancellationToken cancellationToken)
         {
             var patient = await _patientRepository.GetWithDetailsAsync(id, cancellationToken);
@@ -176,16 +184,70 @@ namespace ClinicSystem.Application.Implementations
 
         private async Task<Doctor> GetActiveDoctorAsync(int doctorId, CancellationToken cancellationToken)
         {
-            var doctor = await _doctorRepository.GetByIdAsync(doctorId, cancellationToken);
+            var doctor = await _doctorRepository.GetWithDetailsAsync(doctorId, cancellationToken);
             if (doctor == null)
                 throw new KeyNotFoundException("Family doctor not found");
 
             if (!doctor.IsActive)
                 throw new InvalidOperationException("Family doctor is not active");
 
+            if (!doctor.Specialty.IsFamilyMedicine)
+                throw new InvalidOperationException(
+                    "Family doctor must belong to the Family Medicine specialty");
+
             return doctor;
         }
 
+
+        public async Task<PatientDTO> CreateAccountAsync(int id, CreatePatientAccountDTO dto, CancellationToken cancellationToken)
+        {
+            if (string.IsNullOrWhiteSpace(dto.Email))
+                throw new ArgumentException("Email is required");
+            if (string.IsNullOrWhiteSpace(dto.Password))
+                throw new ArgumentException("Password is required");
+
+            var patient = await _patientRepository.GetWithDetailsAsync(id, cancellationToken);
+            if (patient == null)
+                throw new KeyNotFoundException("Patient not found");
+
+            if (patient.Person.User != null)
+                throw new InvalidOperationException("Patient already has an account");
+
+            var email = dto.Email.Trim();
+
+            if (await _userManager.FindByEmailAsync(email) != null)
+                throw new InvalidOperationException("User with this email already exists");
+
+            // ანგარიში და როლი ერთ ტრანზაქციაში
+            await _unitOfWork.BeginTransactionAsync(cancellationToken);
+            try
+            {
+                var user = new ApplicationUser
+                {
+                    UserName = email,
+                    Email = email,
+                    PersonId = patient.PersonId
+                };
+
+                var createResult = await _userManager.CreateAsync(user, dto.Password);
+                if (!createResult.Succeeded)
+                    throw new ArgumentException(string.Join(", ", createResult.Errors.Select(e => e.Description)));
+
+                var roleResult = await _userManager.AddToRoleAsync(user, Roles.Patient);
+                if (!roleResult.Succeeded)
+                    throw new InvalidOperationException(string.Join(", ", roleResult.Errors.Select(e => e.Description)));
+
+                await _unitOfWork.CommitAsync(cancellationToken);
+            }
+            catch
+            {
+                await _unitOfWork.RollbackAsync(cancellationToken);
+                throw;
+            }
+
+            var updated = await _patientRepository.GetWithDetailsAsync(id, cancellationToken);
+            return _mapper.Map<PatientDTO>(updated);
+        }
         private static void ValidateBirthDate(DateOnly birthDate)
         {
             var today = DateOnly.FromDateTime(DateTime.UtcNow);
@@ -196,5 +258,7 @@ namespace ClinicSystem.Application.Implementations
             if (birthDate < today.AddYears(-120))
                 throw new ArgumentException("Birth date is not valid");
         }
+
+
     }
 }

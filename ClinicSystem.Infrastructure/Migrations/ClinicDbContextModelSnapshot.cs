@@ -58,7 +58,9 @@ namespace ClinicSystem.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("ReferralId");
+                    b.HasIndex("ReferralId")
+                        .IsUnique()
+                        .HasFilter("[ReferralId] IS NOT NULL AND [Status] IN ('Pending', 'Approved')");
 
                     b.HasIndex("DoctorId", "StartTime")
                         .IsUnique()
@@ -352,10 +354,16 @@ namespace ClinicSystem.Infrastructure.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
+                    b.Property<bool>("IsFamilyMedicine")
+                        .HasColumnType("bit");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
+
+                    b.Property<bool>("RequiresReferral")
+                        .HasColumnType("bit");
 
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("datetime2");
@@ -365,7 +373,10 @@ namespace ClinicSystem.Infrastructure.Migrations
                     b.HasIndex("Name")
                         .IsUnique();
 
-                    b.ToTable("Specialties");
+                    b.ToTable("Specialties", t =>
+                        {
+                            t.HasCheckConstraint("CK_Specialties_FamilyMedicine_NoReferral", "NOT ([IsFamilyMedicine] = 1 AND [RequiresReferral] = 1)");
+                        });
                 });
 
             modelBuilder.Entity("ClinicSystem.Domain.Models.Identity.ApplicationUser", b =>

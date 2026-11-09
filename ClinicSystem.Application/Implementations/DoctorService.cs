@@ -1,5 +1,7 @@
 ﻿using AutoMapper;
 using ClinicSystem.Application.Interfaces;
+using ClinicSystem.Application.Validation;
+using ClinicSystem.Domain.Enums;
 using ClinicSystem.Domain.Interfaces;
 using ClinicSystem.Domain.Models.DTOs;
 using ClinicSystem.Domain.Models.Entities;
@@ -13,6 +15,7 @@ namespace ClinicSystem.Application.Implementations
         private readonly IDoctorRepository _doctorRepository;
         private readonly IPersonRepository _personRepository;
         private readonly ISpecialtyRepository _specialtyRepository;
+        private readonly IAppointmentRepository _appointmentRepository;
         private readonly UserManager<ApplicationUser> _userManager;
         private readonly IUnitOfWork _unitOfWork;
         private readonly IMapper _mapper;
@@ -21,6 +24,7 @@ namespace ClinicSystem.Application.Implementations
             IDoctorRepository doctorRepository,
             IPersonRepository personRepository,
             ISpecialtyRepository specialtyRepository,
+            IAppointmentRepository appointmentRepository,
             UserManager<ApplicationUser> userManager,
             IUnitOfWork unitOfWork,
             IMapper mapper)
@@ -28,14 +32,15 @@ namespace ClinicSystem.Application.Implementations
             _doctorRepository = doctorRepository;
             _personRepository = personRepository;
             _specialtyRepository = specialtyRepository;
+            _appointmentRepository = appointmentRepository;
             _userManager = userManager;
             _unitOfWork = unitOfWork;
             _mapper = mapper;
         }
 
-        public async Task<ICollection<DoctorDTO>> GetAllAsync(int? specialtyId, CancellationToken cancellationToken)
+        public async Task<ICollection<DoctorDTO>> GetAllAsync(int? specialtyId, bool includeInactive, CancellationToken cancellationToken)
         {
-            var doctors = await _doctorRepository.GetAllWithDetailsAsync(specialtyId, cancellationToken);
+            var doctors = await _doctorRepository.GetAllWithDetailsAsync(specialtyId, includeInactive, cancellationToken);
             return doctors.Select(_mapper.Map<DoctorDTO>).ToList();
         }
 
@@ -50,10 +55,10 @@ namespace ClinicSystem.Application.Implementations
 
         public async Task<DoctorDTO> AddAsync(CreateDoctorDTO dto, CancellationToken cancellationToken)
         {
-            var firstName = ValidateName(dto.FirstName, "First name");
-            var lastName = ValidateName(dto.LastName, "Last name");
-            var phone = ValidatePhone(dto.Phone);
-            ValidatePersonalNumber(dto.PersonalNumber);
+            var firstName = PersonValidation.ValidateName(dto.FirstName, "First name");
+            var lastName = PersonValidation.ValidateName(dto.LastName, "Last name");
+            var phone = PersonValidation.ValidatePhone(dto.Phone);
+            PersonValidation.ValidatePersonalNumber(dto.PersonalNumber);
 
             if (string.IsNullOrWhiteSpace(dto.Email))
                 throw new ArgumentException("Email is required");
@@ -126,9 +131,9 @@ namespace ClinicSystem.Application.Implementations
             if (doctor == null)
                 throw new KeyNotFoundException("Doctor not found");
 
-            var firstName = ValidateName(dto.FirstName, "First name");
-            var lastName = ValidateName(dto.LastName, "Last name");
-            var phone = ValidatePhone(dto.Phone);
+            var firstName = PersonValidation.ValidateName(dto.FirstName, "First name");
+            var lastName = PersonValidation.ValidateName(dto.LastName, "Last name");
+            var phone = PersonValidation.ValidatePhone(dto.Phone);
 
             var specialty = await _specialtyRepository.GetByIdAsync(dto.SpecialtyId, cancellationToken);
             if (specialty == null)
@@ -150,40 +155,55 @@ namespace ClinicSystem.Application.Implementations
             if (doctor == null)
                 throw new KeyNotFoundException("Doctor not found");
 
-            doctor.IsActive = isActive;
-            await _unitOfWork.SaveChangesAsync(cancellationToken);
+            // დეაქტივაცია იბლოკება, სანამ მომავალი აქტიური ვიზიტები არსებობს
+            if (!isActive)
+            {
+                var now = DateTime.Now;
+
+                if (await _appointmentRepository.ExistsAsync(a =>
+                        a.DoctorId == id
+                        && a.StartTime > now
+                        && (a.Status == AppointmentStatus.Pending || a.Status == AppointmentStatus.Approved),
+                        cancellationToken))
+                    throw new InvalidOperationException(
+                        "Doctor has upcoming appointments. Cancel or reassign them first");
+            }
+
+            var user = await _userManager.FindByIdAsync(doctor.UserId);
+
+            // ექიმის ჩანაწერი და ანგარიში ერთად იცვლება
+            await _unitOfWork.BeginTransactionAsync(cancellationToken);
+            try
+            {
+                doctor.IsActive = isActive;
+
+                if (user != null)
+                {
+                    if (isActive)
+                    {
+                        EnsureSucceeded(await _userManager.SetLockoutEndDateAsync(user, null));
+                        EnsureSucceeded(await _userManager.ResetAccessFailedCountAsync(user));
+                    }
+                    else
+                    {
+                        EnsureSucceeded(await _userManager.SetLockoutEnabledAsync(user, true));
+                        EnsureSucceeded(await _userManager.SetLockoutEndDateAsync(user, DateTimeOffset.MaxValue));
+                    }
+                }
+
+                await _unitOfWork.CommitAsync(cancellationToken);
+            }
+            catch
+            {
+                await _unitOfWork.RollbackAsync(cancellationToken);
+                throw;
+            }
         }
 
-        private static string ValidateName(string? value, string field)
+        private static void EnsureSucceeded(IdentityResult result)
         {
-            if (string.IsNullOrWhiteSpace(value))
-                throw new ArgumentException($"{field} is required");
-
-            var trimmed = value.Trim();
-            if (trimmed.Length > 50)
-                throw new ArgumentException($"{field} must be at most 50 characters");
-
-            return trimmed;
-        }
-
-        private static string? ValidatePhone(string? phone)
-        {
-            if (string.IsNullOrWhiteSpace(phone))
-                return null;
-
-            var trimmed = phone.Trim();
-            if (trimmed.Length > 20)
-                throw new ArgumentException("Phone must be at most 20 characters");
-
-            return trimmed;
-        }
-
-        private static void ValidatePersonalNumber(string? personalNumber)
-        {
-            if (personalNumber == null
-                || personalNumber.Length != 11
-                || !personalNumber.All(c => c >= '0' && c <= '9'))
-                throw new ArgumentException("Personal number must be exactly 11 digits");
+            if (!result.Succeeded)
+                throw new InvalidOperationException(string.Join(", ", result.Errors.Select(e => e.Description)));
         }
     }
 }

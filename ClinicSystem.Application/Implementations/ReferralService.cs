@@ -1,5 +1,6 @@
 ﻿using AutoMapper;
 using ClinicSystem.Application.Interfaces;
+using ClinicSystem.Domain.Enums;
 using ClinicSystem.Domain.Interfaces;
 using ClinicSystem.Domain.Models.DTOs;
 using ClinicSystem.Domain.Models.Entities;
@@ -14,6 +15,7 @@ namespace ClinicSystem.Application.Implementations
         private readonly IReferralRepository _referralRepository;
         private readonly IPatientRepository _patientRepository;
         private readonly IDoctorRepository _doctorRepository;
+        private readonly IAppointmentRepository _appointmentRepository;
         private readonly ISpecialtyRepository _specialtyRepository;
         private readonly IUnitOfWork _unitOfWork;
         private readonly IMapper _mapper;
@@ -22,6 +24,7 @@ namespace ClinicSystem.Application.Implementations
             IReferralRepository referralRepository,
             IPatientRepository patientRepository,
             IDoctorRepository doctorRepository,
+            IAppointmentRepository appointmentRepository,
             ISpecialtyRepository specialtyRepository,
             IUnitOfWork unitOfWork,
             IMapper mapper)
@@ -29,6 +32,7 @@ namespace ClinicSystem.Application.Implementations
             _referralRepository = referralRepository;
             _patientRepository = patientRepository;
             _doctorRepository = doctorRepository;
+            _appointmentRepository = appointmentRepository;
             _specialtyRepository = specialtyRepository;
             _unitOfWork = unitOfWork;
             _mapper = mapper;
@@ -65,15 +69,26 @@ namespace ClinicSystem.Application.Implementations
             if (!doctor.IsActive)
                 throw new InvalidOperationException("Doctor is not active");
 
-            // მიმართვა მხოლოდ პაციენტის ოჯახის ექიმს შეუძლია
-            if (patient.FamilyDoctorId != doctor.Id)
-                throw new InvalidOperationException("Only the patient's family doctor can create a referral");
+            var isFamilyDoctor = patient.FamilyDoctorId == doctor.Id;
+            var hasCompletedConsultation = await _appointmentRepository.ExistsAsync(a =>
+                a.PatientId == patientId
+                && a.DoctorId == doctor.Id
+                && a.Status == AppointmentStatus.Completed,
+                cancellationToken);
 
-            if (!await _specialtyRepository.ExistsAsync(s => s.Id == dto.ToSpecialtyId, cancellationToken))
+            if (!isFamilyDoctor && !hasCompletedConsultation)
+                throw new InvalidOperationException(
+                    "Only the patient's family doctor or a doctor who completed a consultation can create a referral");
+
+            var targetSpecialty = await _specialtyRepository.GetByIdAsync(dto.ToSpecialtyId, cancellationToken);
+            if (targetSpecialty == null)
                 throw new KeyNotFoundException("Specialty not found");
 
             if (dto.ToSpecialtyId == doctor.SpecialtyId)
                 throw new ArgumentException("Cannot refer a patient to the doctor's own specialty");
+
+            if (!targetSpecialty.RequiresReferral)
+                throw new InvalidOperationException("This specialty does not require a referral");
 
             var validDays = dto.ValidForDays ?? DefaultValidDays;
             if (validDays < 1 || validDays > MaxValidDays)

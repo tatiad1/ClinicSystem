@@ -65,5 +65,31 @@ namespace ClinicSystem.Infrastructure.Repositories
                 .Select(a => a.StartTime)
                 .ToListAsync(cancellationToken);
         }
+
+        public async Task<ICollection<DateTime>> GetFutureActiveStartTimesAsync(int doctorId, DateTime from, CancellationToken cancellationToken = default)
+        {
+            return await _context.Appointments
+                .AsNoTracking()
+                .Where(a => a.DoctorId == doctorId
+                    && a.StartTime > from
+                    && (a.Status == AppointmentStatus.Pending || a.Status == AppointmentStatus.Approved))
+                .Select(a => a.StartTime)
+                .ToListAsync(cancellationToken);
+        }
+
+        // თვალყურდევნებულია, რადგან შემდეგ ReminderSent იცვლება
+        public async Task<ICollection<Appointment>> GetDueForReminderAsync(DateTime from, DateTime to, CancellationToken cancellationToken = default)
+        {
+            return await _context.Appointments
+                .Include(a => a.Patient).ThenInclude(p => p.Person).ThenInclude(person => person.User)
+                .Include(a => a.Doctor).ThenInclude(d => d.User).ThenInclude(u => u.Person)
+                .Include(a => a.Doctor).ThenInclude(d => d.Specialty)
+                .Where(a => a.Status == AppointmentStatus.Approved
+                    && !a.ReminderSent
+                    && a.StartTime > from
+                    && a.StartTime <= to
+                    && a.Patient.Person.User != null)
+                .ToListAsync(cancellationToken);
+        }
     }
 }

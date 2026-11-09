@@ -15,5 +15,10 @@ namespace ClinicSystem.Infrastructure.Repositories
         {
             return await _context.Doctors.AnyAsync(d => d.SpecialtyId == specialtyId, cancellationToken);
         }
+
+        public async Task<bool> HasReferralsAsync(int specialtyId, CancellationToken cancellationToken = default)
+        {
+            return await _context.Referrals.AnyAsync(r => r.ToSpecialtyId == specialtyId, cancellationToken);
+        }
     }
 }

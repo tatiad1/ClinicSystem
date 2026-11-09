@@ -1,6 +1,7 @@
 ﻿using AutoMapper;
 using ClinicSystem.Application.Interfaces;
 using ClinicSystem.Domain.Interfaces;
+using ClinicSystem.Domain.Models;
 using ClinicSystem.Domain.Models.DTOs;
 using ClinicSystem.Domain.Models.Entities;
 
@@ -10,20 +11,25 @@ namespace ClinicSystem.Application.Implementations
     {
         private readonly IDoctorScheduleRepository _scheduleRepository;
         private readonly IDoctorRepository _doctorRepository;
+        private readonly IAppointmentRepository _appointmentRepository;
         private readonly IUnitOfWork _unitOfWork;
         private readonly IMapper _mapper;
 
         public DoctorScheduleService(
             IDoctorScheduleRepository scheduleRepository,
             IDoctorRepository doctorRepository,
+            IAppointmentRepository appointmentRepository,
             IUnitOfWork unitOfWork,
             IMapper mapper)
         {
             _scheduleRepository = scheduleRepository;
             _doctorRepository = doctorRepository;
+            _appointmentRepository = appointmentRepository;
             _unitOfWork = unitOfWork;
             _mapper = mapper;
         }
+
+        private record ScheduleWindow(DayOfWeek Day, TimeOnly Start, TimeOnly End);
 
         public async Task<ICollection<DoctorScheduleDTO>> GetByDoctorAsync(int doctorId, CancellationToken cancellationToken)
         {
@@ -80,6 +86,13 @@ namespace ClinicSystem.Application.Implementations
                     id, cancellationToken))
                 throw new InvalidOperationException("Schedule overlaps with an existing schedule on this day");
 
+            // ცვლილების შემდეგ მომავალ ვიზიტებს გრაფიკი არ უნდა დაუკარგოს
+            await EnsureNoOrphanedAppointmentsAsync(
+                schedule.DoctorId,
+                id,
+                new ScheduleWindow(dto.DayOfWeek, dto.StartTime, dto.EndTime),
+                cancellationToken);
+
             schedule.DayOfWeek = dto.DayOfWeek;
             schedule.StartTime = dto.StartTime;
             schedule.EndTime = dto.EndTime;
@@ -94,8 +107,45 @@ namespace ClinicSystem.Application.Implementations
             if (schedule == null)
                 throw new KeyNotFoundException("Schedule not found");
 
+            await EnsureNoOrphanedAppointmentsAsync(schedule.DoctorId, id, null, cancellationToken);
+
             _scheduleRepository.Delete(schedule);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
+        }
+
+        // replacement = null ნიშნავს წაშლას; სხვა შემთხვევაში გრაფიკის ახალ მნიშვნელობას
+        private async Task EnsureNoOrphanedAppointmentsAsync(
+            int doctorId, int changedScheduleId, ScheduleWindow? replacement, CancellationToken cancellationToken)
+        {
+            var upcoming = await _appointmentRepository.GetFutureActiveStartTimesAsync(
+                doctorId, DateTime.Now, cancellationToken);
+
+            if (upcoming.Count == 0)
+                return;
+
+            var schedules = await _scheduleRepository.GetByDoctorAsync(doctorId, cancellationToken);
+
+            // გრაფიკები ცვლილების შემდეგ
+            var windows = schedules
+                .Where(s => s.Id != changedScheduleId)
+                .Select(s => new ScheduleWindow(s.DayOfWeek, s.StartTime, s.EndTime))
+                .ToList();
+
+            if (replacement != null)
+                windows.Add(replacement);
+
+            var slot = TimeSpan.FromMinutes(AppointmentRules.SlotMinutes);
+
+            foreach (var start in upcoming)
+            {
+                var from = TimeOnly.FromDateTime(start);
+                var to = from.Add(slot);
+
+                var covered = windows.Any(w => w.Day == start.DayOfWeek && w.Start <= from && w.End >= to);
+                if (!covered)
+                    throw new InvalidOperationException(
+                        "Doctor has upcoming appointments in this time range. Cancel or reassign them first");
+            }
         }
 
         private static void ValidateTimes(DayOfWeek dayOfWeek, TimeOnly startTime, TimeOnly endTime)

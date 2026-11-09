@@ -17,6 +17,7 @@ namespace ClinicSystem.Application.Implementations
         private readonly IDoctorRepository _doctorRepository;
         private readonly IDoctorScheduleRepository _scheduleRepository;
         private readonly IReferralRepository _referralRepository;
+        private readonly ISpecialtyRepository _specialtyRepository;
         private readonly IUnitOfWork _unitOfWork;
         private readonly IMapper _mapper;
 
@@ -26,6 +27,7 @@ namespace ClinicSystem.Application.Implementations
             IDoctorRepository doctorRepository,
             IDoctorScheduleRepository scheduleRepository,
             IReferralRepository referralRepository,
+            ISpecialtyRepository specialtyRepository,
             IUnitOfWork unitOfWork,
             IMapper mapper)
         {
@@ -34,6 +36,7 @@ namespace ClinicSystem.Application.Implementations
             _doctorRepository = doctorRepository;
             _scheduleRepository = scheduleRepository;
             _referralRepository = referralRepository;
+            _specialtyRepository = specialtyRepository;
             _unitOfWork = unitOfWork;
             _mapper = mapper;
         }
@@ -157,20 +160,33 @@ namespace ClinicSystem.Application.Implementations
                     cancellationToken))
                 throw new InvalidOperationException("Patient already has an appointment at this time");
 
-            // 3. მიმართვა
+            // 3. Referral policy comes from the doctor's specialty. Only Family Medicine
+            // visits are exempt; assigning a non-family specialist must not bypass this rule.
             Referral? referral = null;
+            var specialty = await _specialtyRepository.GetByIdAsync(doctor.SpecialtyId, cancellationToken)
+                ?? throw new KeyNotFoundException("Doctor specialty not found");
 
-            if (patient.FamilyDoctorId == doctor.Id)
+            var referralRequired = specialty.RequiresReferral
+                && !specialty.IsFamilyMedicine;
+
+            if (!referralRequired)
             {
                 if (dto.ReferralId.HasValue)
-                    throw new ArgumentException("Referral is not needed when booking the patient's family doctor");
+                    throw new ArgumentException("A referral is not needed for this specialty");
             }
             else
             {
                 if (!dto.ReferralId.HasValue)
-                    throw new InvalidOperationException("A referral is required to book a doctor other than the family doctor");
+                {
+                    var message = patient.FamilyDoctorId.HasValue
+                        ? "A referral is required for this specialty"
+                        : "Please book a family-medicine appointment and obtain a referral before visiting this specialty";
+                    throw new InvalidOperationException(message);
+                }
 
-                referral = await _referralRepository.GetByIdAsync(dto.ReferralId.Value, cancellationToken);
+                referral = await _referralRepository.GetByIdAsync(
+                    dto.ReferralId.Value, cancellationToken);
+
                 if (referral == null)
                     throw new KeyNotFoundException("Referral not found");
 
@@ -194,7 +210,7 @@ namespace ClinicSystem.Application.Implementations
                 PatientId = patient.Id,
                 DoctorId = doctor.Id,
                 StartTime = start,
-                Status = AppointmentStatus.Pending,
+                Status = AppointmentStatus.Approved,
                 ReferralId = referral?.Id
             };
 
@@ -236,8 +252,11 @@ namespace ClinicSystem.Application.Implementations
             if (newStatus == AppointmentStatus.Cancelled && appointment.StartTime <= now)
                 throw new InvalidOperationException("Cannot cancel an appointment that has already started");
 
-            if (newStatus == AppointmentStatus.NoShow && appointment.StartTime > now)
-                throw new InvalidOperationException("Cannot mark no-show before the appointment time");
+            var noShowAllowedAt = appointment.StartTime.AddMinutes(
+                AppointmentRules.SlotMinutes + AppointmentRules.NoShowGraceMinutes);
+            if (newStatus == AppointmentStatus.NoShow && noShowAllowedAt > now)
+                throw new InvalidOperationException(
+                    "Cannot mark no-show until the appointment has ended and the grace period has passed");
 
             appointment.Status = newStatus;
 

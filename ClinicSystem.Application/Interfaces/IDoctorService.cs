@@ -4,7 +4,7 @@ namespace ClinicSystem.Application.Interfaces
 {
     public interface IDoctorService
     {
-        Task<ICollection<DoctorDTO>> GetAllAsync(int? specialtyId, CancellationToken cancellationToken);
+        Task<ICollection<DoctorDTO>> GetAllAsync(int? specialtyId, bool includeInactive, CancellationToken cancellationToken);
         Task<DoctorDTO?> GetByIdAsync(int id, CancellationToken cancellationToken);
         Task<DoctorDTO> AddAsync(CreateDoctorDTO dto, CancellationToken cancellationToken);
         Task UpdateAsync(int id, UpdateDoctorDTO dto, CancellationToken cancellationToken);

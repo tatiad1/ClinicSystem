@@ -25,6 +25,12 @@ namespace ClinicSystem.Infrastructure.Repositories
             return await _context.Set<T>().FirstOrDefaultAsync(e => e.Id == id, cancellationToken);
         }
 
+        // მხოლოდ წასაკითხად (თვალყურის გარეშე)
+        public async Task<T?> FirstOrDefaultAsync(Expression<Func<T, bool>> predicate, CancellationToken cancellationToken = default)
+        {
+            return await _context.Set<T>().AsNoTracking().FirstOrDefaultAsync(predicate, cancellationToken);
+        }
+
         public async Task<bool> ExistsAsync(Expression<Func<T, bool>> predicate, CancellationToken cancellationToken = default)
         {
             return await _context.Set<T>().AnyAsync(predicate, cancellationToken);

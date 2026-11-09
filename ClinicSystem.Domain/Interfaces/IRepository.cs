@@ -7,6 +7,7 @@ namespace ClinicSystem.Domain.Interfaces
     {
         Task<ICollection<T>> GetAllAsync(CancellationToken cancellationToken = default);
         Task<T?> GetByIdAsync(int id, CancellationToken cancellationToken = default);
+        Task<T?> FirstOrDefaultAsync(Expression<Func<T, bool>> predicate, CancellationToken cancellationToken = default);
         Task<bool> ExistsAsync(Expression<Func<T, bool>> predicate, CancellationToken cancellationToken = default);
         Task AddAsync(T entity, CancellationToken cancellationToken = default);
         void Update(T entity);

@@ -63,6 +63,10 @@ namespace ClinicSystem.Application.Implementations
                 throw new InvalidOperationException(
                     $"Consultation can only be added to an approved appointment (current status: {appointment.Status})");
 
+            if (appointment.StartTime > DateTime.Now)
+                throw new InvalidOperationException(
+                    "Consultation cannot be recorded before the appointment starts");
+
             var diagnosis = ValidateDiagnosis(dto.Diagnosis);
             var prescription = NormalizePrescription(dto.Prescription);
 

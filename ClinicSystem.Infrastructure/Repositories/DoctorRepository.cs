@@ -19,7 +19,8 @@ namespace ClinicSystem.Infrastructure.Repositories
                 .FirstOrDefaultAsync(d => d.Id == id, cancellationToken);
         }
 
-        public async Task<ICollection<Doctor>> GetAllWithDetailsAsync(int? specialtyId = null, CancellationToken cancellationToken = default)
+        public async Task<ICollection<Doctor>> GetAllWithDetailsAsync(
+            int? specialtyId = null, bool includeInactive = true, CancellationToken cancellationToken = default)
         {
             IQueryable<Doctor> query = _context.Doctors
                 .AsNoTracking()
@@ -28,6 +29,9 @@ namespace ClinicSystem.Infrastructure.Repositories
 
             if (specialtyId.HasValue)
                 query = query.Where(d => d.SpecialtyId == specialtyId.Value);
+
+            if (!includeInactive)
+                query = query.Where(d => d.IsActive);
 
             return await query.ToListAsync(cancellationToken);
         }

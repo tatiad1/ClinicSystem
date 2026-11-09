@@ -5,7 +5,7 @@ namespace ClinicSystem.Domain.Models.Entities;
 public class Appointment : BaseEntity
 {
     public DateTime StartTime { get; set; }
-    public AppointmentStatus Status { get; set; } = AppointmentStatus.Pending;
+    public AppointmentStatus Status { get; set; } = AppointmentStatus.Approved;
     public bool ReminderSent { get; set; }
 
     public int PatientId { get; set; }

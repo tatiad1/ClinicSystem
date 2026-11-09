@@ -56,6 +56,9 @@ namespace ClinicSystem.Infrastructure.Data
             {
                 e.Property(s => s.Name).IsRequired().HasMaxLength(100);
                 e.HasIndex(s => s.Name).IsUnique();
+                e.ToTable(t => t.HasCheckConstraint(
+                    "CK_Specialties_FamilyMedicine_NoReferral",
+                    "NOT ([IsFamilyMedicine] = 1 AND [RequiresReferral] = 1)"));
             });
 
             modelBuilder.Entity<Doctor>(e =>
@@ -155,6 +158,11 @@ namespace ClinicSystem.Infrastructure.Data
                 e.HasIndex(a => new { a.PatientId, a.StartTime })
                     .IsUnique()
                     .HasFilter("[Status] IN ('Pending', 'Approved')");
+
+                // ერთი მიმართვა მხოლოდ ერთ აქტიურ ვიზიტზე (პარალელური ჩაწერისგან დასაცავად)
+                e.HasIndex(a => a.ReferralId)
+                    .IsUnique()
+                    .HasFilter("[ReferralId] IS NOT NULL AND [Status] IN ('Pending', 'Approved')");
 
                 e.HasOne(a => a.Patient)
                     .WithMany(p => p.Appointments)
