@@ -536,7 +536,7 @@ async function accountPage(box) {
     const v = readForm(form);
     if (v.newPassword !== v.repeat) { msg.innerHTML = alertBox("The new passwords do not match.", "error"); return; }
     try {
-      await busy($("button", form), () => api("/api/Auth/change-password", { method: "POST", body: { currentPassword: v.currentPassword, newPassword: v.newPassword } }));
+      await busy($("button", form), () => api("/api/Auth/change-password", { method: "PUT", body: { currentPassword: v.currentPassword, newPassword: v.newPassword } }));
       msg.innerHTML = alertBox("Password changed.", "ok"); form.reset();
     } catch (err) { msg.innerHTML = errBox(err); }
   });

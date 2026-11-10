@@ -48,7 +48,7 @@ namespace ClinicSystem.Web.Controllers
         /// <summary>
         /// ცვლის მიმდინარე მომხმარებლის პაროლს (ნებისმიერი როლი)
         /// </summary>
-        [HttpPost("change-password")]
+        [HttpPut("change-password")]
         public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordDTO dto, CancellationToken cancellationToken)
         {
             var userId = _currentUser.UserId
