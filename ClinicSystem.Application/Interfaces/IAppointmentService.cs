@@ -11,8 +11,6 @@ namespace ClinicSystem.Application.Interfaces
 
         Task<AppointmentDTO> AddAsync(CreateAppointmentDTO dto, CancellationToken cancellationToken);
 
-        Task ApproveAsync(int id, CancellationToken cancellationToken);
-        Task RejectAsync(int id, CancellationToken cancellationToken);
         Task CancelAsync(int id, CancellationToken cancellationToken);
         Task MarkNoShowAsync(int id, CancellationToken cancellationToken);
     }

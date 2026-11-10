@@ -2,6 +2,7 @@
 
 	<ItemGroup>
 		<ProjectReference Include="..\ClinicSystem.Domain\ClinicSystem.Domain.csproj" />
+		<ProjectReference Include="..\ClinicSystem.Application\ClinicSystem.Application.csproj" />
 	</ItemGroup>
 
 	<ItemGroup>
@@ -15,6 +16,7 @@
 	    <PrivateAssets>all</PrivateAssets>
 	    <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
 	  </PackageReference>
+	  <PackageReference Include="MailKit" Version="4.18.2" />
 	</ItemGroup>
 
   <PropertyGroup>

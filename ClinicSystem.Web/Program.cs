@@ -15,6 +15,7 @@ using ClinicSystem.Web.BackgroundServices;
 using ClinicSystem.Web.Filters;
 using ClinicSystem.Web.Middleware;
 using ClinicSystem.Web.Responses;
+using ClinicSystem.Web.Seeding;
 using ClinicSystem.Web.Services;
 using ClinicSystem.Web.Validators;
 using FluentValidation;
@@ -196,11 +197,36 @@ builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
 // შეხსენებების პარამეტრები
 builder.Services.Configure<ReminderSettings>(builder.Configuration.GetSection("Reminders"));
 
+// ელფოსტის პარამეტრები: პაროლი უნდა მოვიდეს საიდუმლო კონფიგურაციიდან,
+// მაგალითად გარემოს ცვლადიდან Email__Password.
+builder.Services.Configure<EmailSettings>(builder.Configuration.GetSection("Email"));
+var emailSettings = builder.Configuration.GetSection("Email").Get<EmailSettings>() ?? new EmailSettings();
+if (emailSettings.Enabled)
+{
+    if (string.IsNullOrWhiteSpace(emailSettings.SmtpHost)
+        || emailSettings.SmtpPort <= 0
+        || string.IsNullOrWhiteSpace(emailSettings.SenderEmail)
+        || string.IsNullOrWhiteSpace(emailSettings.Username)
+        || string.IsNullOrWhiteSpace(emailSettings.Password))
+    {
+        throw new InvalidOperationException(
+            "Email delivery is enabled, but one or more Email settings are missing.");
+    }
+}
+
 // Unit of Work
 builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
 
 // გარე მომსახურებები (ინტერფეისი Domain-შია, რეალიზაცია Infrastructure-ში)
-builder.Services.AddScoped<INotificationSender, LoggingNotificationSender>();
+if (emailSettings.Enabled)
+    builder.Services.AddScoped<INotificationSender, SmtpNotificationSender>();
+else
+    builder.Services.AddScoped<INotificationSender, LoggingNotificationSender>();
+
+builder.Services.AddSingleton<EmailNotificationQueue>();
+builder.Services.AddSingleton<IEmailNotificationQueue>(sp =>
+    sp.GetRequiredService<EmailNotificationQueue>());
+builder.Services.AddHostedService<EmailNotificationWorker>();
 
 // Repositories
 builder.Services.AddScoped<ISpecialtyRepository, SpecialtyRepository>();
@@ -225,6 +251,8 @@ builder.Services.AddScoped<IConsultationService, ConsultationService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IStaffService, StaffService>();
 builder.Services.AddScoped<IAppointmentReminderService, AppointmentReminderService>();
+builder.Services.AddScoped<IAccountWelcomeEmailService, AccountWelcomeEmailService>();
+builder.Services.AddScoped<DevelopmentDataSeeder>();
 
 // ფონური სერვისი: ვიზიტამდე შეხსენებები
 builder.Services.AddHostedService<AppointmentReminderWorker>();
@@ -290,6 +318,14 @@ using (var scope = app.Services.CreateScope())
                         $"Could not assign the {role} role to the configured seed administrator: {string.Join(", ", roleResult.Errors.Select(e => e.Description))}");
             }
         }
+    }
+
+    // Demo data is added only in Development and only when the clinic catalogue
+    // is empty. Accounts are created through UserManager, with one shared demo password.
+    if (app.Environment.IsDevelopment())
+    {
+        var demoSeeder = scope.ServiceProvider.GetRequiredService<DevelopmentDataSeeder>();
+        await demoSeeder.SeedIfEmptyAsync();
     }
 }
 

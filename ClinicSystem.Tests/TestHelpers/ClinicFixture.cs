@@ -189,7 +189,10 @@ namespace ClinicSystem.Tests.TestHelpers
             new ReferralRepository(Context),
             new SpecialtyRepository(Context),
             new UnitOfWork(Context),
-            Mapper);
+            Mapper,
+            new FakeEmailNotificationQueue(),
+            Options.Create(new EmailSettings()),
+            NullLogger<AppointmentService>.Instance);
 
         public ReferralService CreateReferralService() => new(
             new ReferralRepository(Context),
@@ -211,7 +214,11 @@ namespace ClinicSystem.Tests.TestHelpers
             new DoctorRepository(Context),
             UserManager,
             new UnitOfWork(Context),
-            Mapper);
+            Mapper,
+            new AccountWelcomeEmailService(
+                new FakeEmailNotificationQueue(),
+                Options.Create(new EmailSettings()),
+                NullLogger<AccountWelcomeEmailService>.Instance));
 
         public ConsultationService CreateConsultationService() => new(
             new ConsultationRepository(Context),
@@ -225,6 +232,7 @@ namespace ClinicSystem.Tests.TestHelpers
             sender,
             new UnitOfWork(Context),
             Options.Create(new ReminderSettings { HoursBefore = hoursBefore }),
+            Options.Create(new EmailSettings { Enabled = true }),
             NullLogger<AppointmentReminderService>.Instance);
     }
 }

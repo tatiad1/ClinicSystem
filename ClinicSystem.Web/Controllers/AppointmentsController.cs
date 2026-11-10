@@ -58,7 +58,7 @@ namespace ClinicSystem.Web.Controllers
         /// <summary>
         /// აბრუნებს პაციენტის ყველა ვიზიტს
         /// </summary>
-        [Authorize(Roles = $"{Roles.Admin},{Roles.Receptionist},{Roles.Patient}")]
+        [Authorize(Roles = $"{Roles.Admin},{Roles.Receptionist},{Roles.Doctor},{Roles.Patient}")]
         [HttpGet("api/patients/{patientId:int}/appointments")]
         public async Task<IActionResult> GetByPatient(int patientId, CancellationToken cancellationToken)
         {
@@ -97,34 +97,6 @@ namespace ClinicSystem.Web.Controllers
             var slots = await _appointmentService.GetAvailableSlotsAsync(doctorId, date.Value, cancellationToken);
 
             return Ok(ApiResponse<object>.Succeed(slots, "Available slots retrieved successfully."));
-        }
-
-        /// <summary>
-        /// ადასტურებს ვიზიტს: Pending → Approved
-        /// </summary>
-        [Authorize(Roles = $"{Roles.Admin},{Roles.Receptionist},{Roles.Doctor}")]
-        [HttpPost("api/appointments/{id:int}/approve")]
-        public async Task<IActionResult> Approve(int id, CancellationToken cancellationToken)
-        {
-            await EnsureAppointmentAccessAsync(id, cancellationToken);
-
-            await _appointmentService.ApproveAsync(id, cancellationToken);
-
-            return Ok(ApiResponse<object>.Succeed(null, "Appointment approved successfully."));
-        }
-
-        /// <summary>
-        /// უარყოფს ვიზიტს: Pending → Rejected. მიმართვა თავისუფლდება
-        /// </summary>
-        [Authorize(Roles = $"{Roles.Admin},{Roles.Receptionist},{Roles.Doctor}")]
-        [HttpPost("api/appointments/{id:int}/reject")]
-        public async Task<IActionResult> Reject(int id, CancellationToken cancellationToken)
-        {
-            await EnsureAppointmentAccessAsync(id, cancellationToken);
-
-            await _appointmentService.RejectAsync(id, cancellationToken);
-
-            return Ok(ApiResponse<object>.Succeed(null, "Appointment rejected successfully."));
         }
 
         /// <summary>

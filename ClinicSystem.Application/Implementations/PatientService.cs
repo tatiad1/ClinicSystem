@@ -17,6 +17,7 @@ namespace ClinicSystem.Application.Implementations
         private readonly UserManager<ApplicationUser> _userManager;
         private readonly IUnitOfWork _unitOfWork;
         private readonly IMapper _mapper;
+        private readonly IAccountWelcomeEmailService _welcomeEmailService;
 
         public PatientService(
             IPatientRepository patientRepository,
@@ -24,7 +25,8 @@ namespace ClinicSystem.Application.Implementations
             IDoctorRepository doctorRepository,
             UserManager<ApplicationUser> userManager,
             IUnitOfWork unitOfWork,
-            IMapper mapper)
+            IMapper mapper,
+            IAccountWelcomeEmailService welcomeEmailService)
         {
             _patientRepository = patientRepository;
             _personRepository = personRepository;
@@ -32,6 +34,7 @@ namespace ClinicSystem.Application.Implementations
             _userManager = userManager;
             _unitOfWork = unitOfWork;
             _mapper = mapper;
+            _welcomeEmailService = welcomeEmailService;
         }
 
         public async Task<ICollection<PatientDTO>> GetAllAsync(int? familyDoctorId, CancellationToken cancellationToken)
@@ -80,6 +83,10 @@ namespace ClinicSystem.Application.Implementations
                     throw new InvalidOperationException("User with this email already exists");
             }
 
+            var contactEmail = string.IsNullOrWhiteSpace(dto.ContactEmail)
+                ? email
+                : dto.ContactEmail.Trim();
+
             int? familyDoctorId = null;
             if (dto.FamilyDoctorId.HasValue)
             {
@@ -100,7 +107,8 @@ namespace ClinicSystem.Application.Implementations
                     FirstName = firstName,
                     LastName = lastName,
                     PersonalNumber = dto.PersonalNumber,
-                    Phone = phone
+                    Phone = phone,
+                    ContactEmail = contactEmail
                 };
 
                 if (email != null)
@@ -139,6 +147,9 @@ namespace ClinicSystem.Application.Implementations
                 throw;
             }
 
+            if (email != null)
+                await _welcomeEmailService.SendWelcomeEmailAsync(email, firstName, Roles.Patient);
+
             var created = await _patientRepository.GetWithDetailsAsync(patientId, cancellationToken);
             return _mapper.Map<PatientDTO>(created);
         }
@@ -158,6 +169,12 @@ namespace ClinicSystem.Application.Implementations
             patient.Person.FirstName = firstName;
             patient.Person.LastName = lastName;
             patient.Person.Phone = phone;
+            if (dto.ContactEmail != null)
+            {
+                patient.Person.ContactEmail = string.IsNullOrWhiteSpace(dto.ContactEmail)
+                    ? null
+                    : dto.ContactEmail.Trim();
+            }
             patient.BirthDate = dto.BirthDate;
 
             await _unitOfWork.SaveChangesAsync(cancellationToken);
@@ -229,6 +246,8 @@ namespace ClinicSystem.Application.Implementations
                     PersonId = patient.PersonId
                 };
 
+                patient.Person.ContactEmail ??= email;
+
                 var createResult = await _userManager.CreateAsync(user, dto.Password);
                 if (!createResult.Succeeded)
                     throw new ArgumentException(string.Join(", ", createResult.Errors.Select(e => e.Description)));
@@ -244,6 +263,8 @@ namespace ClinicSystem.Application.Implementations
                 await _unitOfWork.RollbackAsync(cancellationToken);
                 throw;
             }
+
+            await _welcomeEmailService.SendWelcomeEmailAsync(email, patient.Person.FirstName, Roles.Patient);
 
             var updated = await _patientRepository.GetWithDetailsAsync(id, cancellationToken);
             return _mapper.Map<PatientDTO>(updated);

@@ -55,7 +55,7 @@ namespace ClinicSystem.Web.Services
                 var hasRelevantAppointment = await _appointmentRepository.ExistsAsync(
                     a => a.PatientId == patientId
                         && a.DoctorId == doctorId
-                        && (a.Status == AppointmentStatus.Approved
+                        && (a.Status == AppointmentStatus.Booked
                             || a.Status == AppointmentStatus.Completed),
                     cancellationToken);
 

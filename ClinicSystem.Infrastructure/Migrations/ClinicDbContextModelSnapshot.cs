@@ -60,15 +60,15 @@ namespace ClinicSystem.Infrastructure.Migrations
 
                     b.HasIndex("ReferralId")
                         .IsUnique()
-                        .HasFilter("[ReferralId] IS NOT NULL AND [Status] IN ('Pending', 'Approved')");
+                        .HasFilter("[ReferralId] IS NOT NULL AND [Status] = 'Booked'");
 
                     b.HasIndex("DoctorId", "StartTime")
                         .IsUnique()
-                        .HasFilter("[Status] IN ('Pending', 'Approved')");
+                        .HasFilter("[Status] = 'Booked'");
 
                     b.HasIndex("PatientId", "StartTime")
                         .IsUnique()
-                        .HasFilter("[Status] IN ('Pending', 'Approved')");
+                        .HasFilter("[Status] = 'Booked'");
 
                     b.ToTable("Appointments");
                 });
@@ -261,6 +261,10 @@ namespace ClinicSystem.Infrastructure.Migrations
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
+
+                    b.Property<string>("ContactEmail")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
 
                     b.Property<string>("FirstName")
                         .IsRequired()

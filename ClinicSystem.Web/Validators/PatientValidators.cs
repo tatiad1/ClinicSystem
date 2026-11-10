@@ -12,6 +12,8 @@ namespace ClinicSystem.Web.Validators
             RuleFor(x => x.PersonalNumber).PersonalNumber();
             RuleFor(x => x.Phone!).MaximumLength(20).WithMessage("Phone cannot exceed 20 characters.");
             RuleFor(x => x.BirthDate).ValidBirthDate();
+            When(x => !string.IsNullOrWhiteSpace(x.ContactEmail), () =>
+                RuleFor(x => x.ContactEmail!).EmailField());
 
             RuleFor(x => x.FamilyDoctorId)
                 .GreaterThan(0).WithMessage("Family doctor id is not valid.")
@@ -33,6 +35,8 @@ namespace ClinicSystem.Web.Validators
             RuleFor(x => x.FirstName).PersonName("First name");
             RuleFor(x => x.LastName).PersonName("Last name");
             RuleFor(x => x.Phone!).MaximumLength(20).WithMessage("Phone cannot exceed 20 characters.");
+            When(x => !string.IsNullOrWhiteSpace(x.ContactEmail), () =>
+                RuleFor(x => x.ContactEmail!).EmailField());
             RuleFor(x => x.BirthDate).ValidBirthDate();
         }
     }

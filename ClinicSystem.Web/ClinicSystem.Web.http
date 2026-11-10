@@ -1,18 +1,11 @@
 @host = http://localhost:5220
-
-# Seed SuperAdmin credentials already used by the previous HTTP file.
 @seedAdminEmail = admin@clinic.ge
 @seedAdminPassword = Admin123!
+@emailTestMailbox = 23202226@ibsu.edu.ge
+@visitDate = 2026-11-16
 
-# This must be a future Monday. The schedules below are Monday 09:00-13:00.
-# Change this date when it is no longer in the future.
-@visitDate = 2026-11-09
 
-### 0. Authorization check: no token should return 401
-GET {{host}}/api/specialties
-Accept: application/json
-
-### 1. Sign in as the configured SuperAdmin (also has the Admin role)
+### 1. Sign in as the seeded SuperAdmin
 # @name loginSuperAdmin
 POST {{host}}/api/auth/login
 Content-Type: application/json
@@ -22,10 +15,11 @@ Content-Type: application/json
   "password": "{{seedAdminPassword}}"
 }
 
-### 2. Check the SuperAdmin identity and roles
+
+### 2. Check the signed-in user's role
 GET {{host}}/api/auth/me
 Authorization: Bearer {{loginSuperAdmin.response.body.$.data.token}}
-Accept: application/json
+
 
 ### 3. Create Family Medicine specialty
 # @name createFamilyMedicine
@@ -34,400 +28,26 @@ Authorization: Bearer {{loginSuperAdmin.response.body.$.data.token}}
 Content-Type: application/json
 
 {
-  "name": "Family medicine",
+  "name": "Family Medicine",
   "isFamilyMedicine": true,
   "requiresReferral": false
 }
 
-### 4. Create Surgery specialty that requires a referral
-# @name createSurgerySpecialty
+
+### 4. Create a referral-required specialty
+# @name createCardiology
 POST {{host}}/api/specialties
 Authorization: Bearer {{loginSuperAdmin.response.body.$.data.token}}
 Content-Type: application/json
 
 {
-  "name": "Surgery",
+  "name": "Cardiology",
   "isFamilyMedicine": false,
   "requiresReferral": true
 }
 
-### 5. List specialties
-GET {{host}}/api/specialties
-Authorization: Bearer {{loginSuperAdmin.response.body.$.data.token}}
-Accept: application/json
 
-### 6. Get the Surgery specialty by its returned ID
-GET {{host}}/api/specialties/{{createSurgerySpecialty.response.body.$.data.id}}
-Authorization: Bearer {{loginSuperAdmin.response.body.$.data.token}}
-Accept: application/json
-
-### 7. Update the Surgery referral policy
-PUT {{host}}/api/specialties/{{createSurgerySpecialty.response.body.$.data.id}}
-Authorization: Bearer {{loginSuperAdmin.response.body.$.data.token}}
-Content-Type: application/json
-
-{
-  "name": "Surgery",
-  "isFamilyMedicine": false,
-  "requiresReferral": true
-}
-
-### 8. Create a temporary specialty to test deletion
-# @name createTemporarySpecialty
-POST {{host}}/api/specialties
-Authorization: Bearer {{loginSuperAdmin.response.body.$.data.token}}
-Content-Type: application/json
-
-{
-  "name": "Temporary test specialty",
-  "isFamilyMedicine": false,
-  "requiresReferral": false
-}
-
-### 9. Delete the temporary specialty (it has no doctors or referrals)
-DELETE {{host}}/api/specialties/{{createTemporarySpecialty.response.body.$.data.id}}
-Authorization: Bearer {{loginSuperAdmin.response.body.$.data.token}}
-
-### 10. Create a Family Medicine doctor
-# @name createFamilyDoctor
-POST {{host}}/api/doctors
-Authorization: Bearer {{loginSuperAdmin.response.body.$.data.token}}
-Content-Type: application/json
-
-{
-  "firstName": "Nino",
-  "lastName": "Testdoctor",
-  "personalNumber": "50000000003",
-  "phone": "555000003",
-  "email": "test.familydoctor@example.com",
-  "password": "DoctorPass123!",
-  "specialtyId": {{createFamilyMedicine.response.body.$.data.id}}
-}
-
-### 11. Create a Surgeon
-# @name createSurgeon
-POST {{host}}/api/doctors
-Authorization: Bearer {{loginSuperAdmin.response.body.$.data.token}}
-Content-Type: application/json
-
-{
-  "firstName": "Davit",
-  "lastName": "Testsurgeon",
-  "personalNumber": "50000000004",
-  "phone": "555000004",
-  "email": "test.surgeon@example.com",
-  "password": "DoctorPass123!",
-  "specialtyId": {{createSurgerySpecialty.response.body.$.data.id}}
-}
-
-### 12. Sign in as the Family Medicine doctor
-# @name loginFamilyDoctor
-POST {{host}}/api/auth/login
-Content-Type: application/json
-
-{
-  "email": "test.familydoctor@example.com",
-  "password": "DoctorPass123!"
-}
-
-### 13. Sign in as the Surgeon
-# @name loginSurgeon
-POST {{host}}/api/auth/login
-Content-Type: application/json
-
-{
-  "email": "test.surgeon@example.com",
-  "password": "DoctorPass123!"
-}
-
-### 14. Check the Family Medicine doctor token
-GET {{host}}/api/auth/me
-Authorization: Bearer {{loginFamilyDoctor.response.body.$.data.token}}
-Accept: application/json
-
-### 15. Add the Family Medicine doctor's Monday schedule
-# @name createFamilySchedule
-POST {{host}}/api/doctors/{{createFamilyDoctor.response.body.$.data.id}}/schedules
-Authorization: Bearer {{loginSuperAdmin.response.body.$.data.token}}
-Content-Type: application/json
-
-{
-  "dayOfWeek": "Monday",
-  "startTime": "09:00:00",
-  "endTime": "13:00:00"
-}
-
-### 16. Add the Surgeon's Monday schedule
-# @name createSurgerySchedule
-POST {{host}}/api/doctors/{{createSurgeon.response.body.$.data.id}}/schedules
-Authorization: Bearer {{loginSuperAdmin.response.body.$.data.token}}
-Content-Type: application/json
-
-{
-  "dayOfWeek": "Monday",
-  "startTime": "09:00:00",
-  "endTime": "13:00:00"
-}
-
-### 17. Get the Family Medicine doctor's schedule
-GET {{host}}/api/doctors/{{createFamilyDoctor.response.body.$.data.id}}/schedules
-Authorization: Bearer {{loginSuperAdmin.response.body.$.data.token}}
-Accept: application/json
-
-### 18. Get one schedule by ID
-GET {{host}}/api/schedules/{{createFamilySchedule.response.body.$.data.id}}
-Authorization: Bearer {{loginSuperAdmin.response.body.$.data.token}}
-Accept: application/json
-
-### 19. Update the schedule
-PUT {{host}}/api/schedules/{{createFamilySchedule.response.body.$.data.id}}
-Authorization: Bearer {{loginSuperAdmin.response.body.$.data.token}}
-Content-Type: application/json
-
-{
-  "dayOfWeek": "Monday",
-  "startTime": "09:00:00",
-  "endTime": "13:00:00"
-}
-
-### 20. Check both doctors and the available slots for the test date
-GET {{host}}/api/doctors
-Authorization: Bearer {{loginSuperAdmin.response.body.$.data.token}}
-Accept: application/json
-
-###
-GET {{host}}/api/doctors/{{createFamilyDoctor.response.body.$.data.id}}
-Authorization: Bearer {{loginSuperAdmin.response.body.$.data.token}}
-Accept: application/json
-
-###
-GET {{host}}/api/doctors/{{createFamilyDoctor.response.body.$.data.id}}/available-slots?date={{visitDate}}
-Authorization: Bearer {{loginSuperAdmin.response.body.$.data.token}}
-Accept: application/json
-
-### 21. Register a patient without a family doctor (public self-registration)
-# @name registerPatient
-POST {{host}}/api/auth/register
-Content-Type: application/json
-
-{
-  "firstName": "Tamar",
-  "lastName": "Testpatient",
-  "personalNumber": "50000000006",
-  "phone": "555000006",
-  "birthDate": "1995-05-20",
-  "email": "test.patient@example.com",
-  "password": "PatientPass123!"
-}
-
-### 22. Sign in as the newly registered patient
-# @name loginPatient
-POST {{host}}/api/auth/login
-Content-Type: application/json
-
-{
-  "email": "test.patient@example.com",
-  "password": "PatientPass123!"
-}
-
-### 23. Check the patient identity and patient ID in the token
-GET {{host}}/api/auth/me
-Authorization: Bearer {{loginPatient.response.body.$.data.token}}
-Accept: application/json
-
-### 24. Get the new patient's profile record
-GET {{host}}/api/patients/{{registerPatient.response.body.$.data.id}}
-Authorization: Bearer {{loginPatient.response.body.$.data.token}}
-Accept: application/json
-
-### 25. Admin creates the patient's medical profile
-# @name createMedicalProfile
-POST {{host}}/api/patients/{{registerPatient.response.body.$.data.id}}/medical-profile
-Authorization: Bearer {{loginSuperAdmin.response.body.$.data.token}}
-Content-Type: application/json
-
-{
-  "bloodType": "A+",
-  "allergies": "None known",
-  "chronicConditions": "None"
-}
-
-### 26. Get and update the patient's medical profile
-GET {{host}}/api/patients/{{registerPatient.response.body.$.data.id}}/medical-profile
-Authorization: Bearer {{loginPatient.response.body.$.data.token}}
-Accept: application/json
-
-###
-PUT {{host}}/api/patients/{{registerPatient.response.body.$.data.id}}/medical-profile
-Authorization: Bearer {{loginSuperAdmin.response.body.$.data.token}}
-Content-Type: application/json
-
-{
-  "bloodType": "A+",
-  "allergies": "None known",
-  "chronicConditions": "Updated test record"
-}
-
-### 27. Book a Family Medicine appointment as the patient
-# @name bookFamilyAppointment
-POST {{host}}/api/appointments
-Authorization: Bearer {{loginPatient.response.body.$.data.token}}
-Content-Type: application/json
-
-{
-  "patientId": {{registerPatient.response.body.$.data.id}},
-  "doctorId": {{createFamilyDoctor.response.body.$.data.id}},
-  "startTime": "{{visitDate}}T10:00:00"
-}
-
-### 28. Check the new appointment; it should already be Approved
-GET {{host}}/api/appointments/{{bookFamilyAppointment.response.body.$.data.id}}
-Authorization: Bearer {{loginPatient.response.body.$.data.token}}
-Accept: application/json
-
-###
-GET {{host}}/api/patients/{{registerPatient.response.body.$.data.id}}/appointments
-Authorization: Bearer {{loginPatient.response.body.$.data.token}}
-Accept: application/json
-
-###
-GET {{host}}/api/doctors/{{createFamilyDoctor.response.body.$.data.id}}/appointments?date={{visitDate}}
-Authorization: Bearer {{loginFamilyDoctor.response.body.$.data.token}}
-Accept: application/json
-
-### 29. Expected failure: newly booked appointment is already Approved
-POST {{host}}/api/appointments/{{bookFamilyAppointment.response.body.$.data.id}}/approve
-Authorization: Bearer {{loginFamilyDoctor.response.body.$.data.token}}
-
-### 30. Doctor records the completed consultation
-# Send only after {{visitDate}} 10:00, once the appointment has started and the visit took place.
-# If running requests ahead of time, stop here and send this later; future visits are rejected.
-# @name createFamilyConsultation
-POST {{host}}/api/appointments/{{bookFamilyAppointment.response.body.$.data.id}}/consultation
-Authorization: Bearer {{loginFamilyDoctor.response.body.$.data.token}}
-Content-Type: application/json
-
-{
-  "diagnosis": "Test consultation completed",
-  "prescription": "Follow the doctor's advice"
-}
-
-### 31. Get and update the consultation
-GET {{host}}/api/appointments/{{bookFamilyAppointment.response.body.$.data.id}}/consultation
-Authorization: Bearer {{loginPatient.response.body.$.data.token}}
-Accept: application/json
-
-###
-PUT {{host}}/api/appointments/{{bookFamilyAppointment.response.body.$.data.id}}/consultation
-Authorization: Bearer {{loginFamilyDoctor.response.body.$.data.token}}
-Content-Type: application/json
-
-{
-  "diagnosis": "Updated test consultation",
-  "prescription": "Updated test prescription"
-}
-
-### 32. Family doctor issues a referral to Surgery after the completed consultation
-# @name createReferral
-POST {{host}}/api/patients/{{registerPatient.response.body.$.data.id}}/referrals
-Authorization: Bearer {{loginFamilyDoctor.response.body.$.data.token}}
-Content-Type: application/json
-
-{
-  "toSpecialtyId": {{createSurgerySpecialty.response.body.$.data.id}},
-  "reason": "Needs a specialist examination",
-  "validForDays": 30
-}
-
-### 33. Get the patient's referrals
-GET {{host}}/api/patients/{{registerPatient.response.body.$.data.id}}/referrals?activeOnly=true
-Authorization: Bearer {{loginPatient.response.body.$.data.token}}
-Accept: application/json
-
-###
-GET {{host}}/api/referrals/{{createReferral.response.body.$.data.id}}
-Authorization: Bearer {{loginPatient.response.body.$.data.token}}
-Accept: application/json
-
-### 34. Book Surgery using the referral
-# @name bookSurgeryFirst
-POST {{host}}/api/appointments
-Authorization: Bearer {{loginPatient.response.body.$.data.token}}
-Content-Type: application/json
-
-{
-  "patientId": {{registerPatient.response.body.$.data.id}},
-  "doctorId": {{createSurgeon.response.body.$.data.id}},
-  "startTime": "{{visitDate}}T11:00:00",
-  "referralId": {{createReferral.response.body.$.data.id}}
-}
-
-### 35. Expected failure: the referral is already being used by an active appointment
-POST {{host}}/api/appointments
-Authorization: Bearer {{loginPatient.response.body.$.data.token}}
-Content-Type: application/json
-
-{
-  "patientId": {{registerPatient.response.body.$.data.id}},
-  "doctorId": {{createSurgeon.response.body.$.data.id}},
-  "startTime": "{{visitDate}}T11:30:00",
-  "referralId": {{createReferral.response.body.$.data.id}}
-}
-
-### 36. Cancel the first Surgery visit; this should release its referral
-POST {{host}}/api/appointments/{{bookSurgeryFirst.response.body.$.data.id}}/cancel
-Authorization: Bearer {{loginPatient.response.body.$.data.token}}
-
-### 37. Rebook Surgery using the released referral
-# @name bookSurgeryAgain
-POST {{host}}/api/appointments
-Authorization: Bearer {{loginPatient.response.body.$.data.token}}
-Content-Type: application/json
-
-{
-  "patientId": {{registerPatient.response.body.$.data.id}},
-  "doctorId": {{createSurgeon.response.body.$.data.id}},
-  "startTime": "{{visitDate}}T11:30:00",
-  "referralId": {{createReferral.response.body.$.data.id}}
-}
-
-### 38. Surgeon records the consultation
-# Send only after {{visitDate}} 11:30, once the appointment has started and the visit took place.
-# If running requests ahead of time, stop here and send this later; future visits are rejected.
-# @name createSurgeryConsultation
-POST {{host}}/api/appointments/{{bookSurgeryAgain.response.body.$.data.id}}/consultation
-Authorization: Bearer {{loginSurgeon.response.body.$.data.token}}
-Content-Type: application/json
-
-{
-  "diagnosis": "Specialist test consultation",
-  "prescription": "Specialist test recommendation"
-}
-
-### 39. Get the patient's consultation history
-GET {{host}}/api/patients/{{registerPatient.response.body.$.data.id}}/consultations
-Authorization: Bearer {{loginPatient.response.body.$.data.token}}
-Accept: application/json
-
-### 40. Create an extra appointment to test NoShow timing
-# @name createNoShowAppointment
-POST {{host}}/api/appointments
-Authorization: Bearer {{loginPatient.response.body.$.data.token}}
-Content-Type: application/json
-
-{
-  "patientId": {{registerPatient.response.body.$.data.id}},
-  "doctorId": {{createFamilyDoctor.response.body.$.data.id}},
-  "startTime": "{{visitDate}}T12:00:00"
-}
-
-### 41. Expected failure before the appointment ends and the 15-minute grace period passes
-POST {{host}}/api/appointments/{{createNoShowAppointment.response.body.$.data.id}}/no-show
-Authorization: Bearer {{loginFamilyDoctor.response.body.$.data.token}}
-
-### Run this same NoShow request after {{visitDate}} 12:45 to test successful marking.
-
-### 42. Admin creates a receptionist account
+### 5. Create a receptionist account
 # @name createReceptionist
 POST {{host}}/api/staff/receptionists
 Authorization: Bearer {{loginSuperAdmin.response.body.$.data.token}}
@@ -436,130 +56,295 @@ Content-Type: application/json
 {
   "firstName": "Test",
   "lastName": "Receptionist",
-  "personalNumber": "50000000007",
-  "phone": "555000007",
-  "email": "test.receptionist@example.com",
-  "password": "ReceptionPass123!"
+  "personalNumber": "10000000001",
+  "phone": "555000001",
+  "email": "receptionist@example.com",
+  "password": "TestPass123!"
 }
 
-### 43. Receptionist signs in and checks identity
+
+### 6. Create a Family Medicine doctor account
+# @name createFamilyDoctor
+POST {{host}}/api/doctors
+Authorization: Bearer {{loginSuperAdmin.response.body.$.data.token}}
+Content-Type: application/json
+
+{
+  "firstName": "Family",
+  "lastName": "Doctor",
+  "personalNumber": "20000000002",
+  "phone": "555000002",
+  "email": "family.doctor@example.com",
+  "password": "TestPass123!",
+  "specialtyId": {{createFamilyMedicine.response.body.$.data.id}}
+}
+
+
+### 7. Create a Cardiology doctor account
+# @name createCardiologyDoctor
+POST {{host}}/api/doctors
+Authorization: Bearer {{loginSuperAdmin.response.body.$.data.token}}
+Content-Type: application/json
+
+{
+  "firstName": "Heart",
+  "lastName": "Doctor",
+  "personalNumber": "30000000003",
+  "phone": "555000003",
+  "email": "cardiology.doctor@example.com",
+  "password": "TestPass123!",
+  "specialtyId": {{createCardiology.response.body.$.data.id}}
+}
+
+
+### 8. Give the Family Medicine doctor a Monday schedule, 08:00–12:00
+# Monday is 1 for .NET DayOfWeek.
+# @name createFamilyDoctorSchedule
+POST {{host}}/api/doctors/{{createFamilyDoctor.response.body.$.data.id}}/schedules
+Authorization: Bearer {{loginSuperAdmin.response.body.$.data.token}}
+Content-Type: application/json
+
+{
+  "dayOfWeek": 1,
+  "startTime": "08:00:00",
+  "endTime": "12:00:00"
+}
+
+
+### 9. Give the Cardiology doctor a Monday schedule, 13:00–17:00
+# @name createCardiologySchedule
+POST {{host}}/api/doctors/{{createCardiologyDoctor.response.body.$.data.id}}/schedules
+Authorization: Bearer {{loginSuperAdmin.response.body.$.data.token}}
+Content-Type: application/json
+
+{
+  "dayOfWeek": 1,
+  "startTime": "13:00:00",
+  "endTime": "17:00:00"
+}
+
+
+### 10. Check the doctors and their schedules
+GET {{host}}/api/doctors
+Authorization: Bearer {{loginSuperAdmin.response.body.$.data.token}}
+
+###
+GET {{host}}/api/doctors/{{createFamilyDoctor.response.body.$.data.id}}/schedules
+Authorization: Bearer {{loginSuperAdmin.response.body.$.data.token}}
+
+###
+GET {{host}}/api/doctors/{{createCardiologyDoctor.response.body.$.data.id}}/schedules
+Authorization: Bearer {{loginSuperAdmin.response.body.$.data.token}}
+
+
+### 11. Create a patient assigned to the Family Medicine doctor
+# @name createTestPatient
+POST {{host}}/api/patients
+Authorization: Bearer {{loginSuperAdmin.response.body.$.data.token}}
+Content-Type: application/json
+
+{
+  "firstName": "Email",
+  "lastName": "Testpatient",
+  "personalNumber": "40000000004",
+  "phone": "555000004",
+  "birthDate": "1995-05-20",
+  "familyDoctorId": {{createFamilyDoctor.response.body.$.data.id}},
+  "contactEmail": "{{emailTestMailbox}}"
+}
+
+
+### 12. Check the new patient
+GET {{host}}/api/patients/{{createTestPatient.response.body.$.data.id}}
+Authorization: Bearer {{loginSuperAdmin.response.body.$.data.token}}
+
+
+### 13. Create the patient's medical profile
+POST {{host}}/api/patients/{{createTestPatient.response.body.$.data.id}}/medical-profile
+Authorization: Bearer {{loginSuperAdmin.response.body.$.data.token}}
+Content-Type: application/json
+
+{
+  "bloodType": "O+",
+  "allergies": "No known allergies",
+  "chronicConditions": "None"
+}
+
+
+### 14. Check the patient's medical profile
+GET {{host}}/api/patients/{{createTestPatient.response.body.$.data.id}}/medical-profile
+Authorization: Bearer {{loginSuperAdmin.response.body.$.data.token}}
+
+
+### 15. Get the Family Medicine doctor's open slots
+# @name familyDoctorSlots
+GET {{host}}/api/doctors/{{createFamilyDoctor.response.body.$.data.id}}/available-slots?date={{visitDate}}
+Authorization: Bearer {{loginSuperAdmin.response.body.$.data.token}}
+
+
+### 16. Book the patient with the Family Medicine doctor
+# Run only if request 15 returned at least one slot.
+# A booking confirmation should be sent to emailTestMailbox.
+# @name bookFamilyMedicineVisit
+POST {{host}}/api/appointments
+Authorization: Bearer {{loginSuperAdmin.response.body.$.data.token}}
+Content-Type: application/json
+
+{
+  "patientId": {{createTestPatient.response.body.$.data.id}},
+  "doctorId": {{createFamilyDoctor.response.body.$.data.id}},
+  "startTime": "{{familyDoctorSlots.response.body.$.data[0].startTime}}"
+}
+
+
+### 17. Check the new appointment
+GET {{host}}/api/appointments/{{bookFamilyMedicineVisit.response.body.$.data.id}}
+Authorization: Bearer {{loginSuperAdmin.response.body.$.data.token}}
+
+
+### 18. Check the patient's appointment list
+GET {{host}}/api/patients/{{createTestPatient.response.body.$.data.id}}/appointments
+Authorization: Bearer {{loginSuperAdmin.response.body.$.data.token}}
+
+
+### 19. Try booking the same slot again — this should fail
+POST {{host}}/api/appointments
+Authorization: Bearer {{loginSuperAdmin.response.body.$.data.token}}
+Content-Type: application/json
+
+{
+  "patientId": {{createTestPatient.response.body.$.data.id}},
+  "doctorId": {{createFamilyDoctor.response.body.$.data.id}},
+  "startTime": "{{familyDoctorSlots.response.body.$.data[0].startTime}}"
+}
+
+
+### 20. Sign in as the Family Medicine doctor
+# @name loginFamilyDoctor
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "family.doctor@example.com",
+  "password": "TestPass123!"
+}
+
+
+### 21. The doctor creates a referral to Cardiology
+# @name createReferral
+POST {{host}}/api/patients/{{createTestPatient.response.body.$.data.id}}/referrals
+Authorization: Bearer {{loginFamilyDoctor.response.body.$.data.token}}
+Content-Type: application/json
+
+{
+  "toSpecialtyId": {{createCardiology.response.body.$.data.id}},
+  "reason": "Cardiology assessment requested",
+  "validForDays": 30
+}
+
+
+### 22. Check the patient's referrals
+GET {{host}}/api/patients/{{createTestPatient.response.body.$.data.id}}/referrals?activeOnly=true
+Authorization: Bearer {{loginSuperAdmin.response.body.$.data.token}}
+
+
+### 23. Get the Cardiology doctor's open slots
+# @name cardiologySlots
+GET {{host}}/api/doctors/{{createCardiologyDoctor.response.body.$.data.id}}/available-slots?date={{visitDate}}
+Authorization: Bearer {{loginSuperAdmin.response.body.$.data.token}}
+
+
+### 24. Try booking Cardiology without a referral — this should fail
+POST {{host}}/api/appointments
+Authorization: Bearer {{loginSuperAdmin.response.body.$.data.token}}
+Content-Type: application/json
+
+{
+  "patientId": {{createTestPatient.response.body.$.data.id}},
+  "doctorId": {{createCardiologyDoctor.response.body.$.data.id}},
+  "startTime": "{{cardiologySlots.response.body.$.data[0].startTime}}"
+}
+
+
+### 25. Book Cardiology with the referral
+# @name bookCardiologyVisit
+POST {{host}}/api/appointments
+Authorization: Bearer {{loginSuperAdmin.response.body.$.data.token}}
+Content-Type: application/json
+
+{
+  "patientId": {{createTestPatient.response.body.$.data.id}},
+  "doctorId": {{createCardiologyDoctor.response.body.$.data.id}},
+  "startTime": "{{cardiologySlots.response.body.$.data[0].startTime}}",
+  "referralId": {{createReferral.response.body.$.data.id}}
+}
+
+
+### 26. Cancel the Cardiology appointment
+# This should release the referral for reuse.
+POST {{host}}/api/appointments/{{bookCardiologyVisit.response.body.$.data.id}}/cancel
+Authorization: Bearer {{loginSuperAdmin.response.body.$.data.token}}
+
+
+### 27. Check that the referral is available again
+GET {{host}}/api/patients/{{createTestPatient.response.body.$.data.id}}/referrals?activeOnly=true
+Authorization: Bearer {{loginSuperAdmin.response.body.$.data.token}}
+
+
+### 28. Sign in as the receptionist
 # @name loginReceptionist
 POST {{host}}/api/auth/login
 Content-Type: application/json
 
 {
-  "email": "test.receptionist@example.com",
-  "password": "ReceptionPass123!"
+  "email": "receptionist@example.com",
+  "password": "TestPass123!"
 }
 
-###
-GET {{host}}/api/auth/me
-Authorization: Bearer {{loginReceptionist.response.body.$.data.token}}
-Accept: application/json
 
-### 44. Receptionist creates a walk-in patient record without an account
-# @name createWalkInPatient
-POST {{host}}/api/patients
+### 29. Receptionist can view patients
+GET {{host}}/api/patients
 Authorization: Bearer {{loginReceptionist.response.body.$.data.token}}
+
+
+### 30. Receptionist cannot view the admin list — this should return 403
+GET {{host}}/api/staff/admins
+Authorization: Bearer {{loginReceptionist.response.body.$.data.token}}
+
+
+### 31. Register a patient account through self-registration
+# @name registerSelfPatient
+POST {{host}}/api/auth/register
 Content-Type: application/json
 
 {
-  "firstName": "Walkin",
-  "lastName": "Testpatient",
-  "personalNumber": "50000000008",
-  "phone": "555000008",
-  "birthDate": "1990-01-15",
-  "familyDoctorId": null
+  "firstName": "Self",
+  "lastName": "Registered",
+  "personalNumber": "50000000005",
+  "phone": "555000005",
+  "birthDate": "2000-01-15",
+  "email": "self.patient@example.com",
+  "password": "TestPass123!"
 }
 
-### 45. Receptionist creates an account for the walk-in patient
-POST {{host}}/api/patients/{{createWalkInPatient.response.body.$.data.id}}/account
-Authorization: Bearer {{loginReceptionist.response.body.$.data.token}}
-Content-Type: application/json
 
-{
-  "email": "walkin.test@example.com",
-  "password": "WalkInPass123!"
-}
-
-### 46. Receptionist assigns and then removes a family doctor
-PUT {{host}}/api/patients/{{createWalkInPatient.response.body.$.data.id}}/family-doctor
-Authorization: Bearer {{loginReceptionist.response.body.$.data.token}}
-Content-Type: application/json
-
-{
-  "doctorId": {{createFamilyDoctor.response.body.$.data.id}}
-}
-
-###
-PUT {{host}}/api/patients/{{createWalkInPatient.response.body.$.data.id}}/family-doctor
-Authorization: Bearer {{loginReceptionist.response.body.$.data.token}}
-Content-Type: application/json
-
-{
-  "doctorId": null
-}
-
-### 47. Create an Admin account (SuperAdmin-only)
-# @name createTestAdmin
-POST {{host}}/api/staff/admins
-Authorization: Bearer {{loginSuperAdmin.response.body.$.data.token}}
-Content-Type: application/json
-
-{
-  "firstName": "Test",
-  "lastName": "Admin",
-  "personalNumber": "50000000009",
-  "phone": "555000009",
-  "email": "test.admin@example.com",
-  "password": "TestAdminPass123!"
-}
-
-### 48. New Admin signs in
-# @name loginTestAdmin
+### 32. Sign in as the self-registered patient
+# @name loginSelfPatient
 POST {{host}}/api/auth/login
 Content-Type: application/json
 
 {
-  "email": "test.admin@example.com",
-  "password": "TestAdminPass123!"
+  "email": "self.patient@example.com",
+  "password": "TestPass123!"
 }
 
-### 49. Admin can list receptionists
-GET {{host}}/api/staff/receptionists
-Authorization: Bearer {{loginTestAdmin.response.body.$.data.token}}
-Accept: application/json
 
-### 50. Expected failures: a regular Admin cannot manage Admin accounts (403)
-GET {{host}}/api/staff/admins
-Authorization: Bearer {{loginTestAdmin.response.body.$.data.token}}
+### 33. Check the patient account and role
+GET {{host}}/api/auth/me
+Authorization: Bearer {{loginSelfPatient.response.body.$.data.token}}
 
-###
-POST {{host}}/api/staff/admins
-Authorization: Bearer {{loginTestAdmin.response.body.$.data.token}}
-Content-Type: application/json
 
-{
-  "firstName": "Blocked",
-  "lastName": "Admin",
-  "personalNumber": "50000000010",
-  "email": "blocked.admin@example.com",
-  "password": "BlockedPass123!"
-}
-
-###
-POST {{host}}/api/staff/{{createTestAdmin.response.body.$.data.userId}}/deactivate
-Authorization: Bearer {{loginTestAdmin.response.body.$.data.token}}
-
-### 51. SuperAdmin can deactivate and reactivate that Admin
-POST {{host}}/api/staff/{{createTestAdmin.response.body.$.data.userId}}/deactivate
-Authorization: Bearer {{loginSuperAdmin.response.body.$.data.token}}
-
-###
-POST {{host}}/api/staff/{{createTestAdmin.response.body.$.data.userId}}/activate
-Authorization: Bearer {{loginSuperAdmin.response.body.$.data.token}}
-
-### 52. Admin runs the reminder job (may return sent = 0)
+### 34. Run the reminder check
+# The test appointments are more than 24 hours away, so this should report sent: 0.
 POST {{host}}/api/reminders/run
 Authorization: Bearer {{loginSuperAdmin.response.body.$.data.token}}
-

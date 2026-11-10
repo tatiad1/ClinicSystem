@@ -15,7 +15,7 @@ namespace ClinicSystem.Infrastructure.Repositories
         private static IQueryable<Appointment> WithDetails(IQueryable<Appointment> query)
         {
             return query
-                .Include(a => a.Patient).ThenInclude(p => p.Person)
+                .Include(a => a.Patient).ThenInclude(p => p.Person).ThenInclude(person => person.User)
                 .Include(a => a.Doctor).ThenInclude(d => d.User).ThenInclude(u => u.Person)
                 .Include(a => a.Doctor).ThenInclude(d => d.Specialty);
         }
@@ -61,7 +61,7 @@ namespace ClinicSystem.Infrastructure.Repositories
                 .Where(a => a.DoctorId == doctorId
                     && a.StartTime >= from
                     && a.StartTime < to
-                    && (a.Status == AppointmentStatus.Pending || a.Status == AppointmentStatus.Approved))
+                    && a.Status == AppointmentStatus.Booked)
                 .Select(a => a.StartTime)
                 .ToListAsync(cancellationToken);
         }
@@ -72,7 +72,7 @@ namespace ClinicSystem.Infrastructure.Repositories
                 .AsNoTracking()
                 .Where(a => a.DoctorId == doctorId
                     && a.StartTime > from
-                    && (a.Status == AppointmentStatus.Pending || a.Status == AppointmentStatus.Approved))
+                    && a.Status == AppointmentStatus.Booked)
                 .Select(a => a.StartTime)
                 .ToListAsync(cancellationToken);
         }
@@ -84,11 +84,12 @@ namespace ClinicSystem.Infrastructure.Repositories
                 .Include(a => a.Patient).ThenInclude(p => p.Person).ThenInclude(person => person.User)
                 .Include(a => a.Doctor).ThenInclude(d => d.User).ThenInclude(u => u.Person)
                 .Include(a => a.Doctor).ThenInclude(d => d.Specialty)
-                .Where(a => a.Status == AppointmentStatus.Approved
+                .Where(a => a.Status == AppointmentStatus.Booked
                     && !a.ReminderSent
                     && a.StartTime > from
                     && a.StartTime <= to
-                    && a.Patient.Person.User != null)
+                    && (a.Patient.Person.ContactEmail != null
+                        || (a.Patient.Person.User != null && a.Patient.Person.User.Email != null)))
                 .ToListAsync(cancellationToken);
         }
     }

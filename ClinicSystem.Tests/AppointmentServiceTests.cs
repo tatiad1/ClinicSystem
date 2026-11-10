@@ -22,14 +22,14 @@ namespace ClinicSystem.Tests
         // ---------- ჩაწერა: დრო და გრაფიკი ----------
 
         [Fact]
-        public async Task AddAsync_FamilyDoctorWithoutReferral_CreatesApprovedAppointment()
+        public async Task AddAsync_FamilyDoctorWithoutReferral_CreatesBookedAppointment()
         {
             var f = new ClinicFixture();
             var service = f.CreateAppointmentService();
 
             var result = await BookAsync(service, f.Patient.Id, f.FamilyDoctor.Id, f.NextMonday(10, 0));
 
-            Assert.Equal(AppointmentStatus.Approved, result.Status);
+            Assert.Equal(AppointmentStatus.Booked, result.Status);
             Assert.Equal(f.FamilyDoctor.Id, result.DoctorId);
             Assert.Equal(f.Patient.Id, result.PatientId);
         }
@@ -184,33 +184,6 @@ namespace ClinicSystem.Tests
         // ---------- სტატუსები ----------
 
         [Fact]
-        public async Task ApproveAsync_PendingAppointment_BecomesApproved()
-        {
-            var f = new ClinicFixture();
-            var service = f.CreateAppointmentService();
-            var pending = f.AddAppointment(
-                f.Patient,
-                f.FamilyDoctor,
-                f.NextMonday(10, 0),
-                AppointmentStatus.Pending);
-
-            await service.ApproveAsync(pending.Id, CancellationToken.None);
-
-            Assert.Equal(AppointmentStatus.Approved, f.Context.Appointments.Single().Status);
-        }
-
-        [Fact]
-        public async Task ApproveAsync_AlreadyApproved_ThrowsInvalidOperation()
-        {
-            var f = new ClinicFixture();
-            var service = f.CreateAppointmentService();
-            var booked = await BookAsync(service, f.Patient.Id, f.FamilyDoctor.Id, f.NextMonday(10, 0));
-
-            await Assert.ThrowsAsync<InvalidOperationException>(() =>
-                service.ApproveAsync(booked.Id, CancellationToken.None));
-        }
-
-        [Fact]
         public async Task CancelAsync_AppointmentWithReferral_ReleasesReferral()
         {
             var f = new ClinicFixture();
@@ -245,7 +218,7 @@ namespace ClinicSystem.Tests
                 f.Patient,
                 f.FamilyDoctor,
                 DateTime.Now.AddMinutes(-40),
-                AppointmentStatus.Approved);
+                AppointmentStatus.Booked);
 
             var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
                 service.MarkNoShowAsync(appointment.Id, CancellationToken.None));
@@ -262,7 +235,7 @@ namespace ClinicSystem.Tests
                 f.Patient,
                 f.FamilyDoctor,
                 DateTime.Now.AddMinutes(-46),
-                AppointmentStatus.Approved);
+                AppointmentStatus.Booked);
 
             await service.MarkNoShowAsync(appointment.Id, CancellationToken.None);
 

@@ -12,6 +12,7 @@ namespace ClinicSystem.Application.Implementations
         private readonly INotificationSender _notificationSender;
         private readonly IUnitOfWork _unitOfWork;
         private readonly ReminderSettings _settings;
+        private readonly EmailSettings _emailSettings;
         private readonly ILogger<AppointmentReminderService> _logger;
 
         public AppointmentReminderService(
@@ -19,17 +20,22 @@ namespace ClinicSystem.Application.Implementations
             INotificationSender notificationSender,
             IUnitOfWork unitOfWork,
             IOptions<ReminderSettings> options,
+            IOptions<EmailSettings> emailOptions,
             ILogger<AppointmentReminderService> logger)
         {
             _appointmentRepository = appointmentRepository;
             _notificationSender = notificationSender;
             _unitOfWork = unitOfWork;
             _settings = options.Value;
+            _emailSettings = emailOptions.Value;
             _logger = logger;
         }
 
         public async Task<int> SendDueRemindersAsync(CancellationToken cancellationToken)
         {
+            if (!_emailSettings.Enabled)
+                return 0;
+
             var now = DateTime.Now;
             var until = now.AddHours(_settings.HoursBefore);
 
@@ -39,7 +45,9 @@ namespace ClinicSystem.Application.Implementations
 
             foreach (var appointment in appointments)
             {
-                var email = appointment.Patient.Person.User?.Email;
+                var email = string.IsNullOrWhiteSpace(appointment.Patient.Person.ContactEmail)
+                    ? appointment.Patient.Person.User?.Email
+                    : appointment.Patient.Person.ContactEmail;
                 if (string.IsNullOrWhiteSpace(email))
                     continue;
 

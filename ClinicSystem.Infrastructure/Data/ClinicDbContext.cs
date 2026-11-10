@@ -32,6 +32,7 @@ namespace ClinicSystem.Infrastructure.Data
                 e.Property(p => p.LastName).IsRequired().HasMaxLength(50);
                 e.Property(p => p.PersonalNumber).IsRequired().HasMaxLength(11).IsFixedLength();
                 e.Property(p => p.Phone).HasMaxLength(20);
+                e.Property(p => p.ContactEmail).HasMaxLength(256);
                 e.HasIndex(p => p.PersonalNumber).IsUnique();
 
                 // პირადი ნომერი: ზუსტად 11 ციფრი
@@ -152,17 +153,17 @@ namespace ClinicSystem.Infrastructure.Data
                 // ექიმს ერთ დროს ერთი აქტიური ვიზიტი
                 e.HasIndex(a => new { a.DoctorId, a.StartTime })
                     .IsUnique()
-                    .HasFilter("[Status] IN ('Pending', 'Approved')");
+                    .HasFilter("[Status] = 'Booked'");
 
                 // პაციენტსაც ერთ დროს ერთი აქტიური ვიზიტი
                 e.HasIndex(a => new { a.PatientId, a.StartTime })
                     .IsUnique()
-                    .HasFilter("[Status] IN ('Pending', 'Approved')");
+                    .HasFilter("[Status] = 'Booked'");
 
                 // ერთი მიმართვა მხოლოდ ერთ აქტიურ ვიზიტზე (პარალელური ჩაწერისგან დასაცავად)
                 e.HasIndex(a => a.ReferralId)
                     .IsUnique()
-                    .HasFilter("[ReferralId] IS NOT NULL AND [Status] IN ('Pending', 'Approved')");
+                    .HasFilter("[ReferralId] IS NOT NULL AND [Status] = 'Booked'");
 
                 e.HasOne(a => a.Patient)
                     .WithMany(p => p.Appointments)

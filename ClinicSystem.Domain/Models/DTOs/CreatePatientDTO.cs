@@ -9,6 +9,9 @@
         public DateOnly BirthDate { get; set; }
         public int? FamilyDoctorId { get; set; }
 
+        // Contact address for reminders; does not create a login account by itself.
+        public string? ContactEmail { get; set; }
+
         // ანგარიში არასავალდებულოა
         public string? Email { get; set; }
         public string? Password { get; set; }

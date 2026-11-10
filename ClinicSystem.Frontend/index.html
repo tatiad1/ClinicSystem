@@ -1,26 +1,39 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ka">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Clinic Portal</title>
+  <meta name="theme-color" content="#f5f7f5">
+  <title>კლინიკა — ვიზიტების მართვა</title>
+  <meta name="description" content="კლინიკის მართვის სისტემა: ვიზიტები, პაციენტები, ექიმები და კონსულტაციები">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Georgian:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
   <header class="topbar">
-    <div class="brand"><span class="logo">+</span> Clinic Portal</div>
+    <div class="brand">
+      <span class="logo" aria-hidden="true">+</span>
+      <span class="brand-copy">Clinic Portal<small>კლინიკის ციფრული სივრცე</small></span>
+    </div>
     <div id="userbox" class="userbox" hidden>
       <span id="user-name" class="user-name"></span>
       <span id="user-role" class="role-badge"></span>
       <button id="logout-btn" class="btn small light" type="button">Log out</button>
     </div>
-    <button id="menu-btn" class="menu-btn" type="button" aria-label="Menu" hidden>&#9776;</button>
+    <button id="menu-btn" class="menu-btn" type="button" aria-label="Open menu" aria-expanded="false" hidden>&#9776;</button>
   </header>
 
-  <noscript><p class="alert error">This site needs JavaScript.</p></noscript>
+  <noscript><p class="alert error noscript">ამ გვერდის გამოსაყენებლად საჭიროა JavaScript.</p></noscript>
 
-  <!-- Login / register -->
   <section id="auth-view" class="auth-wrap" hidden>
+    <div class="auth-story">
+      <div class="brand"><span class="logo" aria-hidden="true">+</span><span>Clinic Portal</span></div>
+      <h1>ჯანმრთელობაზე ზრუნვა უფრო მარტივად.</h1>
+      <p>ვიზიტები, ექიმები და სამედიცინო ისტორია — ერთ დაცულ სივრცეში.</p>
+      <div class="auth-note"><span>✓</span> უსაფრთხო წვდომა თქვენი როლის მიხედვით</div>
+    </div>
     <div class="card auth-card">
       <div class="tabs">
         <button type="button" class="tab active" data-tab="login">Sign in</button>
@@ -36,10 +49,10 @@
 
       <form id="register-form" class="form" hidden novalidate>
         <div class="grid2">
-          <label class="field"><span>First name *</span><input name="firstName" required></label>
-          <label class="field"><span>Last name *</span><input name="lastName" required></label>
+          <label class="field"><span>First name *</span><input name="firstName" autocomplete="given-name" required></label>
+          <label class="field"><span>Last name *</span><input name="lastName" autocomplete="family-name" required></label>
           <label class="field"><span>Personal number *</span><input name="personalNumber" required></label>
-          <label class="field"><span>Phone *</span><input name="phone" type="tel" required></label>
+          <label class="field"><span>Phone *</span><input name="phone" type="tel" autocomplete="tel" required></label>
           <label class="field"><span>Birth date *</span><input name="birthDate" type="date" required></label>
           <label class="field"><span>Email *</span><input name="email" type="email" autocomplete="email" required></label>
         </div>
@@ -49,14 +62,12 @@
     </div>
   </section>
 
-  <!-- Signed-in area -->
   <div id="app-view" class="app" hidden>
-    <nav id="nav" class="sidenav" aria-label="Main"></nav>
+    <nav id="nav" class="sidenav" aria-label="Main navigation"></nav>
     <main id="view" class="main"></main>
   </div>
 
-  <!-- Pop-up window used for forms and details -->
-  <dialog id="modal" class="modal">
+  <dialog id="modal" class="modal" aria-labelledby="modal-title">
     <div class="modal-head">
       <h2 id="modal-title"></h2>
       <button type="button" class="btn small ghost" data-close aria-label="Close">&#10005;</button>
@@ -65,7 +76,6 @@
   </dialog>
 
   <div id="toasts" class="toasts" aria-live="polite"></div>
-
   <script src="app.js"></script>
 </body>
 </html>

@@ -8,7 +8,7 @@ namespace ClinicSystem.Domain.Interfaces
         Task<ICollection<Appointment>> GetByPatientAsync(int patientId, CancellationToken cancellationToken = default);
         Task<ICollection<Appointment>> GetByDoctorAsync(int doctorId, DateOnly? date, CancellationToken cancellationToken = default);
 
-        // ექიმის აქტიური (Pending/Approved) ვიზიტების დაწყების დროები ერთ დღეში
+        // ექიმის აქტიური (დადასტურებული) ვიზიტების დაწყების დროები ერთ დღეში
         Task<ICollection<DateTime>> GetActiveStartTimesAsync(int doctorId, DateOnly date, CancellationToken cancellationToken = default);
 
         // ექიმის მომავალი აქტიური ვიზიტების დროები

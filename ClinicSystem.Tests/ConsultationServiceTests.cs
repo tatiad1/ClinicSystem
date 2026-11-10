@@ -14,7 +14,7 @@ public class ConsultationServiceTests
             fixture.Patient,
             fixture.FamilyDoctor,
             DateTime.Now.AddHours(1),
-            AppointmentStatus.Approved);
+            AppointmentStatus.Booked);
         var service = fixture.CreateConsultationService();
 
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
@@ -24,7 +24,7 @@ public class ConsultationServiceTests
             }, CancellationToken.None));
 
         Assert.Contains("before the appointment starts", exception.Message);
-        Assert.Equal(AppointmentStatus.Approved, appointment.Status);
+        Assert.Equal(AppointmentStatus.Booked, appointment.Status);
         Assert.Empty(fixture.Context.Consultations);
     }
 
@@ -36,7 +36,7 @@ public class ConsultationServiceTests
             fixture.Patient,
             fixture.FamilyDoctor,
             DateTime.Now.AddMinutes(-5),
-            AppointmentStatus.Approved);
+            AppointmentStatus.Booked);
         var service = fixture.CreateConsultationService();
 
         var result = await service.AddAsync(appointment.Id, new CreateConsultationDTO

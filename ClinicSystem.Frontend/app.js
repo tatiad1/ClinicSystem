@@ -420,7 +420,7 @@ async function openPatientDetail(pid, onChange) {
       const fd = pick(p, "familyDoctorId", "familyDoctor.id");
       let html = `<h2>${esc(personName(p, "Patient #" + pid))}</h2>` + dl([
         ["Personal number", pick(p, "personalNumber")], ["Phone", pick(p, "phone")], ["Birth date", fmtDate(pick(p, "birthDate"))],
-        ["Email", pick(p, "email")], ["Family doctor", fd ? doctorNameById(fd) : "None assigned"]]);
+        ["Contact email", pick(p, "contactEmail", "email")], ["Family doctor", fd ? doctorNameById(fd) : "None assigned"]]);
       if (front) {
         const fams = doctors().filter(d => isActiveDoctor(d) && isFM(findSpecialty(d.specialtyId)));
         const list = fams;
@@ -429,7 +429,7 @@ async function openPatientDetail(pid, onChange) {
           <button class="btn small" data-act="assignfd">Assign</button>
           <button class="btn small danger ghost" data-act="removefd" ${fd ? "" : "disabled"}>Remove</button></div>
           <div class="actions"><button class="btn small ghost" data-act="editpatient">Edit details</button>
-          ${p.isRegistered || p.email ? '<button class="btn small ghost" disabled>Login account exists</button>' : '<button class="btn small ghost" data-act="account">Create login account</button>'}</div>`;
+          ${p.hasAccount ? '<button class="btn small ghost" disabled>Login account exists</button>' : '<button class="btn small ghost" data-act="account">Create login account</button>'}</div>`;
         if (!list.length) html += '<p class="muted">No active Family Medicine doctors are available to assign.</p>';
       }
       el.innerHTML = html;
@@ -449,12 +449,12 @@ async function openPatientDetail(pid, onChange) {
         editpatient: () => openForm({
           title: "Edit patient", back: reopen,
           fields: field("First name", "firstName", { value: p.firstName ?? "", required: true }) + field("Last name", "lastName", { value: p.lastName ?? "", required: true }) +
-            field("Phone", "phone", { value: p.phone ?? "", required: true }) + field("Birth date", "birthDate", { type: "date", value: String(p.birthDate ?? "").slice(0, 10), required: true }),
-          onSubmit: async v => { await api(`/api/Patients/${pid}`, { method: "PUT", body: { firstName: v.firstName, lastName: v.lastName, phone: v.phone, birthDate: v.birthDate } }); toast("Patient updated."); }
+            field("Phone", "phone", { value: p.phone ?? "", required: true }) + field("Contact email", "contactEmail", { type: "email", value: p.contactEmail ?? "" }) + field("Birth date", "birthDate", { type: "date", value: String(p.birthDate ?? "").slice(0, 10), required: true }),
+          onSubmit: async v => { await api(`/api/Patients/${pid}`, { method: "PUT", body: { firstName: v.firstName, lastName: v.lastName, phone: v.phone, contactEmail: v.contactEmail, birthDate: v.birthDate } }); toast("Patient updated."); }
         }),
         account: () => openForm({
           title: "Create login account", back: reopen, submitLabel: "Create account",
-          fields: `<p class="muted">Only for patients who do not have an account yet.</p>` + field("Email", "email", { type: "email", value: p.email ?? "", required: true }) + field("Password", "password", { type: "password", required: true }),
+          fields: `<p class="muted">Only for patients who do not have an account yet.</p>` + field("Email", "email", { type: "email", value: p.contactEmail ?? p.email ?? "", required: true }) + field("Password", "password", { type: "password", required: true }),
           onSubmit: async v => { await api(`/api/Patients/${pid}/account`, { method: "POST", body: { email: v.email, password: v.password } }); toast("Account created."); }
         })
       });
@@ -465,7 +465,8 @@ async function openPatientDetail(pid, onChange) {
   api(`/api/patients/${pid}/appointments`).then(d => { $("#pd-appts", c).innerHTML = apptTable(sortByStart(asList(d), -1), "plain"); })
     .catch(e => { $("#pd-appts", c).innerHTML = errBox(e); });
 
-  // referrals (+ issue form for the patient's family doctor)
+  // Referrals may be issued by the family doctor or by a doctor who completed
+  // a consultation with this patient. Patients themselves cannot issue them.
   (async () => {
     const el = $("#pd-refs", c);
     try {
@@ -474,10 +475,22 @@ async function openPatientDetail(pid, onChange) {
       if (hasRole("Doctor")) {
         const p = await patientP.catch(() => null);
         const fd = p ? pick(p, "familyDoctorId", "familyDoctor.id") : undefined;
-        canIssue = !!p && fd !== undefined && fd !== null && state.doctorId !== null
+        const isFamilyDoctor = !!p && fd !== undefined && fd !== null && state.doctorId !== null
           && String(fd) === String(state.doctorId);
+        let hasCompletedConsultation = false;
+        if (p && state.doctorId !== null && !isFamilyDoctor) {
+          try {
+            const consultations = asList(await api(`/api/patients/${pid}/consultations`));
+            hasCompletedConsultation = consultations.some(x => String(x.doctorId) === String(state.doctorId));
+          } catch { /* the API remains the final authority for issuing a referral */ }
+        }
+        canIssue = isFamilyDoctor || hasCompletedConsultation;
       }
-      el.innerHTML = referralCards(list) + (canIssue ? `<button class="btn small" data-act="issue">Issue referral</button>` : (hasRole("Doctor") ? `<p class="muted">Only the patient's family doctor can issue referrals.</p>` : ""));
+      el.innerHTML = referralCards(list) + (canIssue
+        ? `<button class="btn small" data-act="issue">Issue referral</button>`
+        : (hasRole("Doctor")
+          ? `<p class="muted">The family doctor, or a doctor who has completed a consultation with this patient, can issue a referral.</p>`
+          : ""));
       onClick(el, { issue: () => {
         const targets = specialties().filter(s => !isFM(s));
         openForm({
@@ -754,9 +767,10 @@ async function patientsPage(box) { // used by doctor (own patients), receptionis
     ${doctorMode ? "" : `<label class="field"><span>Family doctor</span><select id="p-fam"><option value="">All patients</option>${famOptions.map(d => `<option value="${esc(d.id)}">${esc(doctorName(d))}</option>`).join("")}</select></label>`}</div><div id="p-list"></div>`;
   const draw = () => {
     const q = $("#p-search", box).value.trim().toLowerCase();
-    const list = all.filter(p => !q || [personName(p, ""), p.personalNumber, p.phone].join(" ").toLowerCase().includes(q));
+    const list = all.filter(p => !q || [personName(p, ""), p.personalNumber, p.phone, p.contactEmail, p.email].join(" ").toLowerCase().includes(q));
     $("#p-list", box).innerHTML = list.length ? table([
       ["Name", p => esc(personName(p, "Patient #" + p.id))], ["Personal no.", p => esc(p.personalNumber ?? "—")], ["Phone", p => esc(p.phone ?? "—")],
+      ["Contact email", p => esc(p.contactEmail ?? p.email ?? "—")],
       ["Birth date", p => esc(fmtDate(p.birthDate))],
       ["Family doctor", p => { const f = pick(p, "familyDoctorId", "familyDoctor.id"); return esc(f ? doctorNameById(f) : "—"); }],
       ["", p => `<button class="btn small" data-act="open" data-id="${esc(p.id)}">Open</button>`]], list) : empty(all.length ? "No patients match your search." : "No patients found.");
@@ -778,13 +792,13 @@ function openRegisterPatient(onDone) {
   openForm({
     title: "Register patient", submitLabel: "Register patient",
     fields: `<div class="grid2">${field("First name", "firstName", { required: true }) + field("Last name", "lastName", { required: true }) +
-      field("Personal number", "personalNumber", { required: true }) + field("Phone", "phone", { type: "tel", required: true }) +
+      field("Personal number", "personalNumber", { required: true }) + field("Phone", "phone", { type: "tel", required: true }) + field("Contact email", "contactEmail", { type: "email" }) +
       field("Birth date", "birthDate", { type: "date", required: true })}</div>
       <h3>Login account (optional)</h3><p class="muted">Fill in both fields to also create a login account. You can also do this later from the patient's page.</p>
-      <div class="grid2">${field("Email", "email", { type: "email" }) + field("Password", "password", { type: "password" })}</div>`,
+      <div class="grid2">${field("Login email", "email", { type: "email" }) + field("Password", "password", { type: "password" })}</div>`,
     onSubmit: async v => {
       if (!!v.email !== !!v.password) throw new Error("Fill in both email and password, or leave both empty.");
-      const body = { firstName: v.firstName, lastName: v.lastName, personalNumber: v.personalNumber, phone: v.phone, birthDate: v.birthDate, familyDoctorId: null };
+      const body = { firstName: v.firstName, lastName: v.lastName, personalNumber: v.personalNumber, phone: v.phone, contactEmail: v.contactEmail, birthDate: v.birthDate, familyDoctorId: null };
       if (v.email) { body.email = v.email; body.password = v.password; }
       await api("/api/Patients", { method: "POST", body });
       toast("Patient registered.");
@@ -800,7 +814,7 @@ async function staffDashboard(box) {
     hasRole("Receptionist") ? `<div class="actions" style="margin-bottom:1rem"><button class="btn" data-act="register">Register a new patient</button></div>` : "");
   onClick(box, { register: () => openRegisterPatient(() => toast("Open “Patients” to see the new patient.", "ok")), reminders: async el => {
     if (!confirm("Send appointment reminders now?")) return;
-    await runAction(el, () => api("/api/Reminders/run", { method: "POST" }), "Reminders were sent.");
+    await runAction(el, () => api("/api/Reminders/run", { method: "POST" }), "Reminder check completed.");
   } });
   const live = $("#live", box);
   const jobs = [["Doctors", "/api/Doctors"], ["Specialties", "/api/Specialties"], ["Patients", "/api/Patients"]];
@@ -808,7 +822,16 @@ async function staffDashboard(box) {
   if (hasRole("SuperAdmin")) jobs.push(["Administrators", "/api/staff/admins"]);
   live.innerHTML = loading();
   const res = await Promise.allSettled(jobs.map(j => api(j[1], { query: j[0] === "Doctors" ? { includeInactive: true } : undefined })));
-  live.innerHTML = `<div class="cards">${jobs.map((j, i) => `<div class="card"><div class="muted">${esc(j[0])}</div><div class="stat">${res[i].status === "fulfilled" ? asList(res[i].value).length : "—"}</div></div>`).join("")}</div>` +
+  const currentUserId = String(pick(state.me, ...ME_FIELDS.userId) ?? "");
+  const currentEmail = String(pick(state.me, ...ME_FIELDS.email) ?? "").toLowerCase();
+  live.innerHTML = `<div class="cards">${jobs.map((j, i) => {
+    let count = res[i].status === "fulfilled" ? asList(res[i].value).length : "—";
+    if (j[0] === "Administrators" && state.role === "SuperAdmin" && count !== "—") {
+      count = asList(res[i].value).filter(u =>
+        String(u.userId ?? u.id) !== currentUserId && String(u.email ?? "").toLowerCase() !== currentEmail).length;
+    }
+    return `<div class="card"><div class="muted">${esc(j[0])}</div><div class="stat">${count}</div></div>`;
+  }).join("")}</div>` +
     (adminRole ? `<button class="btn ghost" data-act="reminders">Send reminders now</button>` : "");
 }
 
@@ -902,18 +925,38 @@ async function schedulesPage(box) {
 }
 
 async function specialtiesPage(box) {
-  const form = (title, s) => openForm({
-    title,
-    fields: field("Name", "name", { value: s ? s.name : "", required: true }) +
-      field("This is Family Medicine (visits never need a referral)", "isFamilyMedicine", { type: "checkbox", value: s ? s.isFamilyMedicine : false }) +
-      field("Visits require a referral", "requiresReferral", { type: "checkbox", value: s ? s.requiresReferral : false }),
-    onSubmit: async v => {
-      const body = { name: v.name, isFamilyMedicine: v.isFamilyMedicine, requiresReferral: v.isFamilyMedicine ? false : v.requiresReferral };
-      await api(s ? `/api/Specialties/${s.id}` : "/api/Specialties", { method: s ? "PUT" : "POST", body });
-      toast(s ? "Specialty updated." : "Specialty created.");
-    },
-    afterSave: () => { closeModal(); load(); }
-  });
+  const form = (title, s) => {
+    const formEl = openForm({
+      title,
+      fields: field("Name", "name", { value: s ? s.name : "", required: true }) +
+        field("This is Family Medicine (visits never need a referral)", "isFamilyMedicine", { type: "checkbox", value: s ? s.isFamilyMedicine : false }) +
+        field("Visits require a referral", "requiresReferral", { type: "checkbox", value: s ? s.requiresReferral : false }),
+      onSubmit: async v => {
+        const body = { name: v.name, isFamilyMedicine: v.isFamilyMedicine, requiresReferral: v.isFamilyMedicine ? false : v.requiresReferral };
+        await api(s ? `/api/Specialties/${s.id}` : "/api/Specialties", { method: s ? "PUT" : "POST", body });
+        toast(s ? "Specialty updated." : "Specialty created.");
+      },
+      afterSave: () => { closeModal(); load(); }
+    });
+
+    const familyMedicine = $('[name="isFamilyMedicine"]', formEl);
+    const requiresReferral = $('[name="requiresReferral"]', formEl);
+    const syncReferralRules = changed => {
+      // If old data already has both flags checked, keep the Family Medicine rule.
+      if (!changed && familyMedicine.checked && requiresReferral.checked)
+        requiresReferral.checked = false;
+      if (changed?.checked) {
+        const other = changed === familyMedicine ? requiresReferral : familyMedicine;
+        other.checked = false;
+      }
+      familyMedicine.disabled = requiresReferral.checked;
+      requiresReferral.disabled = familyMedicine.checked;
+    };
+    familyMedicine.addEventListener("change", e => syncReferralRules(e.currentTarget));
+    requiresReferral.addEventListener("change", e => syncReferralRules(e.currentTarget));
+    syncReferralRules();
+    return formEl;
+  };
   const load = async () => {
     cache.specialties = null;
     cache.doctors = null;
@@ -923,11 +966,11 @@ async function specialtiesPage(box) {
     if (!cache.specialties || !cache.doctors) { box.innerHTML = hdr + alertBox("Could not load doctor assignments. Try again before deleting a specialty.", "error"); return; }
     box.innerHTML = hdr + (specialties().length ? table([["Name", s => esc(s.name)], ["Family Medicine", s => isFM(s) ? "Yes" : "No"], ["Needs referral", s => needsReferral(s) ? "Yes" : "No"],
       ["", s => {
-        const inUse = doctors().some(d => String(d.specialtyId) === String(s.id));
-        const deleteButton = inUse
-          ? `<button class="btn small danger ghost" disabled title="This specialty is assigned to a doctor">Delete</button>`
+        const assignedDoctors = doctors().filter(d => String(d.specialtyId) === String(s.id)).length;
+        const deleteAction = assignedDoctors
+          ? `<span class="badge warn" title="Remove or reassign these doctors before deleting this specialty">In use by ${assignedDoctors} doctor${assignedDoctors === 1 ? "" : "s"} · cannot delete</span>`
           : `<button class="btn small danger ghost" data-act="del" data-id="${esc(s.id)}">Delete</button>`;
-        return `<button class="btn small ghost" data-act="edit" data-id="${esc(s.id)}">Edit</button>` + deleteButton;
+        return `<button class="btn small ghost" data-act="edit" data-id="${esc(s.id)}">Edit</button>${deleteAction}`;
       }]], specialties()) : empty("No specialties yet."));
   };
   onClick(box, {
@@ -953,11 +996,22 @@ async function staffPage(box, kind) {
   const load = async () => {
     box.innerHTML = head(title, add) + loading();
     try {
-      const list = asList(await api(`/api/staff/${kind}`));
+      const allAccounts = asList(await api(`/api/staff/${kind}`));
+      const activeAdminCount = kind === "admins" ? allAccounts.filter(u => activeFlag(u) === true).length : 0;
+      const currentUserId = String(pick(state.me, ...ME_FIELDS.userId) ?? "");
+      const currentEmail = String(pick(state.me, ...ME_FIELDS.email) ?? "").toLowerCase();
+      // The seeded SuperAdmin also has the Admin role for admin-level access.
+      // Keep that protected account out of the regular administrator list.
+      const list = kind === "admins" && state.role === "SuperAdmin"
+        ? allAccounts.filter(u => String(u.userId ?? u.id) !== currentUserId && String(u.email ?? "").toLowerCase() !== currentEmail)
+        : allAccounts;
       box.innerHTML = head(title, add) + (list.length ? table([["Name", u => esc(personName(u, "—"))], ["Email", u => esc(u.email ?? "—")], ["Phone", u => esc(u.phone ?? "—")],
         ["Status", u => { const a = activeFlag(u); return a === undefined ? "—" : `<span class="badge ${a ? "ok" : "bad"}">${a ? "Active" : "Inactive"}</span>`; }],
         ["", u => { const a = activeFlag(u), id = esc(u.userId ?? u.id);
-          return (a !== true ? `<button class="btn small ghost" data-act="activate" data-id="${id}">Activate</button>` : "") + (a !== false ? `<button class="btn small danger ghost" data-act="deactivate" data-id="${id}">Deactivate</button>` : ""); }]], list) : empty(`No ${one} accounts yet.`));
+          const activate = a !== true ? `<button class="btn small ghost" data-act="activate" data-id="${id}">Activate</button>` : "";
+          if (a !== true) return activate;
+          if (kind === "admins" && activeAdminCount <= 1) return `${activate}<span class="muted" title="The last active administrator cannot be deactivated">Last active admin · protected</span>`;
+          return `${activate}<button class="btn small danger ghost" data-act="deactivate" data-id="${id}">Deactivate</button>`; }]], list) : empty(`No ${one} accounts yet.`));
     } catch (e) { box.innerHTML = head(title, add) + errBox(e); }
   };
   onClick(box, {
@@ -1033,6 +1087,7 @@ function route() {
 
 function showAuth(msg, type = "info") {
   state.role = null;
+  delete document.body.dataset.role;
   $("#app-view").hidden = true; $("#userbox").hidden = true; $("#menu-btn").hidden = true;
   $("#auth-view").hidden = false;
   const m = $("#auth-msg");
@@ -1077,6 +1132,7 @@ async function startSession(loginRes) {
     throw new ApiError(0, `No known role found (Patient, Doctor, Receptionist, Admin, SuperAdmin). The server sent: ${seen}`);
   }
   state.me = me; state.role = role;
+  document.body.dataset.role = role;
   state.patientId = pick(me, ...ME_FIELDS.patientId) ?? null;
   state.doctorId = pick(me, ...ME_FIELDS.doctorId) ?? null;
   if (role === "Doctor" && state.doctorId == null) { // fallback: find myself in the doctors list

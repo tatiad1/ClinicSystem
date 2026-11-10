@@ -1,10 +1,13 @@
 ﻿using AutoMapper;
 using ClinicSystem.Application.Interfaces;
+using ClinicSystem.Application.Settings;
 using ClinicSystem.Domain.Enums;
 using ClinicSystem.Domain.Interfaces;
 using ClinicSystem.Domain.Models;
 using ClinicSystem.Domain.Models.DTOs;
 using ClinicSystem.Domain.Models.Entities;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace ClinicSystem.Application.Implementations
 {
@@ -20,6 +23,9 @@ namespace ClinicSystem.Application.Implementations
         private readonly ISpecialtyRepository _specialtyRepository;
         private readonly IUnitOfWork _unitOfWork;
         private readonly IMapper _mapper;
+        private readonly IEmailNotificationQueue _emailNotificationQueue;
+        private readonly EmailSettings _emailSettings;
+        private readonly ILogger<AppointmentService> _logger;
 
         public AppointmentService(
             IAppointmentRepository appointmentRepository,
@@ -29,7 +35,10 @@ namespace ClinicSystem.Application.Implementations
             IReferralRepository referralRepository,
             ISpecialtyRepository specialtyRepository,
             IUnitOfWork unitOfWork,
-            IMapper mapper)
+            IMapper mapper,
+            IEmailNotificationQueue emailNotificationQueue,
+            IOptions<EmailSettings> emailOptions,
+            ILogger<AppointmentService> logger)
         {
             _appointmentRepository = appointmentRepository;
             _patientRepository = patientRepository;
@@ -39,6 +48,9 @@ namespace ClinicSystem.Application.Implementations
             _specialtyRepository = specialtyRepository;
             _unitOfWork = unitOfWork;
             _mapper = mapper;
+            _emailNotificationQueue = emailNotificationQueue;
+            _emailSettings = emailOptions.Value;
+            _logger = logger;
         }
 
         // ---------- წაკითხვა ----------
@@ -149,14 +161,14 @@ namespace ClinicSystem.Application.Implementations
             if (await _appointmentRepository.ExistsAsync(a =>
                     a.DoctorId == doctor.Id
                     && a.StartTime == start
-                    && (a.Status == AppointmentStatus.Pending || a.Status == AppointmentStatus.Approved),
+                    && a.Status == AppointmentStatus.Booked,
                     cancellationToken))
                 throw new InvalidOperationException("Doctor already has an appointment at this time");
 
             if (await _appointmentRepository.ExistsAsync(a =>
                     a.PatientId == patient.Id
                     && a.StartTime == start
-                    && (a.Status == AppointmentStatus.Pending || a.Status == AppointmentStatus.Approved),
+                    && a.Status == AppointmentStatus.Booked,
                     cancellationToken))
                 throw new InvalidOperationException("Patient already has an appointment at this time");
 
@@ -210,7 +222,7 @@ namespace ClinicSystem.Application.Implementations
                 PatientId = patient.Id,
                 DoctorId = doctor.Id,
                 StartTime = start,
-                Status = AppointmentStatus.Approved,
+                Status = AppointmentStatus.Booked,
                 ReferralId = referral?.Id
             };
 
@@ -218,16 +230,44 @@ namespace ClinicSystem.Application.Implementations
             await _unitOfWork.SaveChangesAsync(cancellationToken);
 
             var created = await _appointmentRepository.GetWithDetailsAsync(appointment.Id, cancellationToken);
+            if (created != null)
+                await SendBookingConfirmationAsync(created, cancellationToken);
+
             return _mapper.Map<AppointmentDTO>(created);
         }
 
+        private async Task SendBookingConfirmationAsync(Appointment appointment, CancellationToken cancellationToken)
+        {
+            if (!_emailSettings.Enabled)
+                return;
+
+            var patient = appointment.Patient;
+            var email = string.IsNullOrWhiteSpace(patient.Person.ContactEmail)
+                ? patient.Person.User?.Email
+                : patient.Person.ContactEmail;
+            if (string.IsNullOrWhiteSpace(email))
+                return;
+
+            var patientName = $"{patient.Person.FirstName} {patient.Person.LastName}";
+            var doctorName = $"{appointment.Doctor.User.Person.FirstName} {appointment.Doctor.User.Person.LastName}";
+            var subject = "Appointment booked";
+            var body = $"Dear {patientName}, your appointment is booked with Dr. {doctorName} " +
+                       $"({appointment.Doctor.Specialty.Name}) on {appointment.StartTime:yyyy-MM-dd} " +
+                       $"at {appointment.StartTime:HH:mm}.";
+
+            try
+            {
+                await _emailNotificationQueue.EnqueueAsync(
+                    email.Trim(), subject, body, CancellationToken.None);
+            }
+            catch (Exception ex)
+            {
+                // The appointment is already saved; an email failure must not undo the booking.
+                _logger.LogError(ex, "Failed to send booking confirmation for appointment {AppointmentId}", appointment.Id);
+            }
+        }
+
         // ---------- სტატუსები ----------
-
-        public Task ApproveAsync(int id, CancellationToken cancellationToken)
-            => ChangeStatusAsync(id, AppointmentStatus.Approved, cancellationToken);
-
-        public Task RejectAsync(int id, CancellationToken cancellationToken)
-            => ChangeStatusAsync(id, AppointmentStatus.Rejected, cancellationToken);
 
         public Task CancelAsync(int id, CancellationToken cancellationToken)
             => ChangeStatusAsync(id, AppointmentStatus.Cancelled, cancellationToken);
@@ -246,9 +286,6 @@ namespace ClinicSystem.Application.Implementations
 
             var now = DateTime.Now;
 
-            if (newStatus == AppointmentStatus.Approved && appointment.StartTime <= now)
-                throw new InvalidOperationException("Appointment time has already passed");
-
             if (newStatus == AppointmentStatus.Cancelled && appointment.StartTime <= now)
                 throw new InvalidOperationException("Cannot cancel an appointment that has already started");
 
@@ -260,9 +297,8 @@ namespace ClinicSystem.Application.Implementations
 
             appointment.Status = newStatus;
 
-            // უარყოფილ ან გაუქმებულ ვიზიტზე მიმართვა ისევ თავისუფლდება
-            if ((newStatus == AppointmentStatus.Rejected || newStatus == AppointmentStatus.Cancelled)
-                && appointment.ReferralId.HasValue)
+            // გაუქმებულ ვიზიტზე მიმართვა ისევ თავისუფლდება
+            if (newStatus == AppointmentStatus.Cancelled && appointment.ReferralId.HasValue)
             {
                 var referral = await _referralRepository.GetByIdAsync(appointment.ReferralId.Value, cancellationToken);
                 if (referral != null)
@@ -274,15 +310,8 @@ namespace ClinicSystem.Application.Implementations
 
         private static bool IsTransitionAllowed(AppointmentStatus from, AppointmentStatus to)
         {
-            return from switch
-            {
-                AppointmentStatus.Pending => to is AppointmentStatus.Approved
-                    or AppointmentStatus.Rejected
-                    or AppointmentStatus.Cancelled,
-                AppointmentStatus.Approved => to is AppointmentStatus.Cancelled
-                    or AppointmentStatus.NoShow,
-                _ => false
-            };
+            return from == AppointmentStatus.Booked
+                && (to == AppointmentStatus.Cancelled || to == AppointmentStatus.NoShow);
         }
 
         private static void ValidateSlot(DateTime start)

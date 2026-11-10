@@ -59,9 +59,9 @@ namespace ClinicSystem.Application.Implementations
             if (await _consultationRepository.ExistsAsync(c => c.AppointmentId == appointmentId, cancellationToken))
                 throw new InvalidOperationException("Consultation already exists for this appointment");
 
-            if (appointment.Status != AppointmentStatus.Approved)
+            if (appointment.Status != AppointmentStatus.Booked)
                 throw new InvalidOperationException(
-                    $"Consultation can only be added to an approved appointment (current status: {appointment.Status})");
+                    $"Consultation can only be added to a booked appointment (current status: {appointment.Status})");
 
             if (appointment.StartTime > DateTime.Now)
                 throw new InvalidOperationException(

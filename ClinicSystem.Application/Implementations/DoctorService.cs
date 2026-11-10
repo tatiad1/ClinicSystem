@@ -19,6 +19,7 @@ namespace ClinicSystem.Application.Implementations
         private readonly UserManager<ApplicationUser> _userManager;
         private readonly IUnitOfWork _unitOfWork;
         private readonly IMapper _mapper;
+        private readonly IAccountWelcomeEmailService _welcomeEmailService;
 
         public DoctorService(
             IDoctorRepository doctorRepository,
@@ -27,7 +28,8 @@ namespace ClinicSystem.Application.Implementations
             IAppointmentRepository appointmentRepository,
             UserManager<ApplicationUser> userManager,
             IUnitOfWork unitOfWork,
-            IMapper mapper)
+            IMapper mapper,
+            IAccountWelcomeEmailService welcomeEmailService)
         {
             _doctorRepository = doctorRepository;
             _personRepository = personRepository;
@@ -36,6 +38,7 @@ namespace ClinicSystem.Application.Implementations
             _userManager = userManager;
             _unitOfWork = unitOfWork;
             _mapper = mapper;
+            _welcomeEmailService = welcomeEmailService;
         }
 
         public async Task<ICollection<DoctorDTO>> GetAllAsync(int? specialtyId, bool includeInactive, CancellationToken cancellationToken)
@@ -121,6 +124,8 @@ namespace ClinicSystem.Application.Implementations
                 throw;
             }
 
+            await _welcomeEmailService.SendWelcomeEmailAsync(email, firstName, Roles.Doctor);
+
             var created = await _doctorRepository.GetWithDetailsAsync(doctorId, cancellationToken);
             return _mapper.Map<DoctorDTO>(created);
         }
@@ -163,7 +168,7 @@ namespace ClinicSystem.Application.Implementations
                 if (await _appointmentRepository.ExistsAsync(a =>
                         a.DoctorId == id
                         && a.StartTime > now
-                        && (a.Status == AppointmentStatus.Pending || a.Status == AppointmentStatus.Approved),
+                        && a.Status == AppointmentStatus.Booked,
                         cancellationToken))
                     throw new InvalidOperationException(
                         "Doctor has upcoming appointments. Cancel or reassign them first");

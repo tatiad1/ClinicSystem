@@ -14,15 +14,18 @@ namespace ClinicSystem.Application.Implementations
         private readonly UserManager<ApplicationUser> _userManager;
         private readonly IPersonRepository _personRepository;
         private readonly IUnitOfWork _unitOfWork;
+        private readonly IAccountWelcomeEmailService _welcomeEmailService;
 
         public StaffService(
             UserManager<ApplicationUser> userManager,
             IPersonRepository personRepository,
-            IUnitOfWork unitOfWork)
+            IUnitOfWork unitOfWork,
+            IAccountWelcomeEmailService welcomeEmailService)
         {
             _userManager = userManager;
             _personRepository = personRepository;
             _unitOfWork = unitOfWork;
+            _welcomeEmailService = welcomeEmailService;
         }
 
         public async Task<ICollection<StaffDTO>> GetStaffAsync(string role, CancellationToken cancellationToken)
@@ -66,25 +69,25 @@ namespace ClinicSystem.Application.Implementations
             if (await _userManager.FindByEmailAsync(email) != null)
                 throw new InvalidOperationException("User with this email already exists");
 
+            var person = new Person
+            {
+                FirstName = firstName,
+                LastName = lastName,
+                PersonalNumber = dto.PersonalNumber,
+                Phone = phone
+            };
+
+            var user = new ApplicationUser
+            {
+                UserName = email,
+                Email = email,
+                Person = person
+            };
+
             // ანგარიში და როლი ერთ ტრანზაქციაში: ან ორივე ჩაიწერება, ან არც ერთი
             await _unitOfWork.BeginTransactionAsync(cancellationToken);
             try
             {
-                var person = new Person
-                {
-                    FirstName = firstName,
-                    LastName = lastName,
-                    PersonalNumber = dto.PersonalNumber,
-                    Phone = phone
-                };
-
-                var user = new ApplicationUser
-                {
-                    UserName = email,
-                    Email = email,
-                    Person = person
-                };
-
                 var createResult = await _userManager.CreateAsync(user, dto.Password);
                 if (!createResult.Succeeded)
                     throw new ArgumentException(string.Join(", ", createResult.Errors.Select(e => e.Description)));
@@ -92,14 +95,16 @@ namespace ClinicSystem.Application.Implementations
                 EnsureSucceeded(await _userManager.AddToRoleAsync(user, role));
 
                 await _unitOfWork.CommitAsync(cancellationToken);
-
-                return ToDto(user, person, role);
             }
             catch
             {
                 await _unitOfWork.RollbackAsync(cancellationToken);
                 throw;
             }
+
+            await _welcomeEmailService.SendWelcomeEmailAsync(email, firstName, role);
+
+            return ToDto(user, person, role);
         }
 
         public async Task SetStaffActiveAsync(string userId, bool isActive, string currentUserId, bool currentUserIsSuperAdmin, CancellationToken cancellationToken)

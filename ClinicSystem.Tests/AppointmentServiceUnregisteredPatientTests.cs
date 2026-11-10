@@ -85,7 +85,7 @@ public class AppointmentServiceUnregisteredPatientTests
             CancellationToken.None);
 
         Assert.Equal(referral.Id, appointment.ReferralId);
-        Assert.Equal(AppointmentStatus.Approved, appointment.Status);
+        Assert.Equal(AppointmentStatus.Booked, appointment.Status);
         Assert.Null(patient.FamilyDoctorId); // referral doesn't assign a permanent family doctor
     }
 
